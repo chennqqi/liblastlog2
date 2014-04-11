@@ -9,10 +9,16 @@
 
 #define QUOTE(name) #name
 #define STR(macro) QUOTE(macro)
+
 #define UID_MAX ((uid_t) -1)
 #define LASTLOG_PATH "/tmp/var/log/lastlog2/"
-#define PATH_LEN (sizeof (LASTLOG_PATH) + sizeof (STR (UID_MAX)) - 1)
-#define LASTLOG_FILE_LEN (PATH_LEN + sizeof(STR (UID_MAX)))
+
+#define LASTLOG_PATH_LEN (sizeof (LASTLOG_PATH) + sizeof (STR (UID_MAX)) - 1)
+#define LASTLOG_FILE_LEN (LASTLOG_PATH_LEN + sizeof(STR (UID_MAX)) - 1)
+
+/* +1 for slash char */
+#define LASTLOG_PATH_LEN_PLUS (LASTLOG_PATH + 1)
+#define LASTLOG_FILE_LEN_PLUS (LASTLOG_FILE_LEN + 1)
 
 struct lastlog2 {
     struct lastlog old_ll;
@@ -29,7 +35,7 @@ int ll_read(const uid_t uid, struct lastlog2 *const ll)
     assert (ll != NULL);
 
     const uid_t uid_dir = get_uid_dir(uid);
-    char path[LASTLOG_FILE_LEN] = {0};
+    char path[LASTLOG_FILE_LEN_PLUS] = {0};
     sprintf(path, "%s%u/%u", LASTLOG_PATH, uid_dir, uid);
 
     const int ll_fd = open (path, O_RDWR | O_NOFOLLOW);
@@ -53,7 +59,7 @@ int ll_add(const uid_t uid, const struct lastlog2 *const ll)
 
     const uid_t uid_dir = get_uid_dir(uid);
     /* We use one \0 char for \ char in sprintf. */
-    char ll_path[PATH_LEN] = {0};
+    char ll_path[LASTLOG_PATH_LEN] = {0};
     /* So... we have 3 NUL chars for free.. one we use for /. Second we use as normal and... */
     char true_path[sizeof("/proc/self/fd/") + sizeof(STR (INT_MAX)) + sizeof(STR (UID_MAX)) - 1];
     sprintf (ll_path, "%s%u", LASTLOG_PATH, uid_dir);
