@@ -38,7 +38,7 @@ int ll_read (const uid_t uid, struct lastlog2 *const ll)
     char path[LASTLOG_FILE_LEN_PLUS] = {0};
     sprintf (path, "%s%u/%u", LASTLOG_PATH, uid_dir, uid);
 
-    const int ll_fd = open (path, O_RDWR | O_NOFOLLOW);
+    const int ll_fd = open (path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     if (ll_fd == -1) {
         perror ("no log file");
     }
@@ -79,7 +79,7 @@ int ll_add (const uid_t uid, const struct lastlog2 *const ll)
     int checked = 0;
     /* We like C right? ; is just empty statement... is better than empty block. */
 repeat: ;
-    const int dir_fd = open (ll_path, O_DIRECTORY);
+    const int dir_fd = open (ll_path, O_DIRECTORY | O_NOFOLLOW);
     if (!checked && (dir_fd == -1)) {
         if (mkdir (ll_path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) != 0) {
             perror ("create dir");
@@ -93,7 +93,7 @@ repeat: ;
         perror ("die");
     }
 
-    const int ll_fd = open (true_path, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    const int ll_fd = open (true_path, O_WRONLY | O_CREAT | O_CLOEXEC | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (ll_fd == -1) {
         close (dir_fd);
         perror ("ll_file");
