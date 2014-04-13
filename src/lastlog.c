@@ -43,6 +43,18 @@ int ll_read(const uid_t uid, struct lastlog2 *const ll)
         perror("no log file");
     }
 
+    struct stat st = {0};
+    if (fstat(ll_fd, &st) == -1)
+    {
+        perror ("stat");
+    }
+
+    /* check record size */
+    if (st.st_size != sizeof (*ll)) {
+        close (ll_fd);
+        return -1;
+    }
+
     if (read (ll_fd, ll, sizeof(*ll)) == -1) {
         close (ll_fd);
         perror ("read record");
