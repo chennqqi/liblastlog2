@@ -173,7 +173,7 @@ repeat: ;
         return -1;
     }
 
-    sprintf (true_path, "%s%u/%u", "/proc/self/fd/", dir_fd, uid);
+    sprintf (true_path, "/proc/self/fd/%u/%u", dir_fd, uid);
     const int ll_fd = open (true_path, O_WRONLY | O_CREAT | O_CLOEXEC | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (ll_fd == -1) {
         close (dir_fd);
