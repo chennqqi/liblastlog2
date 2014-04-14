@@ -39,7 +39,7 @@ static int ll_read_impl (const uid_t uid, struct lastlog *const ll, struct ll_ex
 static inline uid_t get_uid_dir (uid_t uid)
 {
     return (uid - (uid % 1000));
-};
+}
 
 static int check_extension(unsigned int extension_id)
 {
