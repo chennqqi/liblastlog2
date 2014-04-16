@@ -31,8 +31,8 @@ struct ll_extension {
 };
 
 /* TODO: move to header file. Add attributes. */
-static int ll_add_impl (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex);
-static int ll_read_impl (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex);
+static int add_lastlog_impl (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex);
+static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex);
 
 #define EXTENSION_MAGIC 1
 
@@ -54,17 +54,17 @@ static int check_extension(unsigned int extension_id)
 }
 
 
-inline int ll_read (const uid_t uid, struct lastlog *const ll)
+inline int get_lastlog (const uid_t uid, struct lastlog *const ll)
 {
-    return ll_read_impl (uid, ll, NULL);
+    return get_lastlog_impl (uid, ll, NULL);
 }
 
-inline int ll_read_ex (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex)
+inline int get_lastlog_ex (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex)
 {
-    return ll_read_impl (uid, ll, ll_ex);
+    return get_lastlog_impl (uid, ll, ll_ex);
 }
 
-static int ll_read_impl (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex)
+static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex)
 {
     assert (ll != NULL);
 
@@ -134,17 +134,17 @@ static int ll_read_impl (const uid_t uid, struct lastlog *const ll, struct ll_ex
     return 1;
 }
 
-inline int ll_add (const uid_t uid, const struct lastlog *const ll)
+inline int add_lastlog (const uid_t uid, const struct lastlog *const ll)
 {
-    return ll_add_impl (uid, ll, NULL);
+    return add_lastlog_impl (uid, ll, NULL);
 }
 
-inline int ll_add_ex (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex)
+inline int add_lastlog_ex (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex)
 {
-    return ll_add_impl (uid, ll, ll_ex);
+    return add_lastlog_impl (uid, ll, ll_ex);
 }
 
-static int ll_add_impl (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex)
+static int add_lastlog_impl (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex)
 {
     assert (ll != NULL);
 
@@ -218,17 +218,17 @@ int main (int argc, char **argv)
     struct lastlog ll = {0};
     struct ll_extension ll_ex = {0};
 
-    ll_add_ex (1034, &ll, &ll_ex);
-    ll_add_ex (1000, &ll, &ll_ex);
-    ll_add_ex (999, &ll, &ll_ex);
-    ll_add_ex (10, &ll, &ll_ex);
-    ll_add_ex (11034, &ll, &ll_ex);
-    ll_add_ex (0, &ll, &ll_ex);
-    ll_add_ex ((uid_t)-1, &ll, &ll_ex);
-    ll_add_ex ((uid_t)(((uid_t)-1) / (uid_t)2), &ll, &ll_ex);
+    add_lastlog_ex (1034, &ll, &ll_ex);
+    add_lastlog_ex (1000, &ll, &ll_ex);
+    add_lastlog_ex (999, &ll, &ll_ex);
+    add_lastlog_ex (10, &ll, &ll_ex);
+    add_lastlog_ex (11034, &ll, &ll_ex);
+    add_lastlog_ex (0, &ll, &ll_ex);
+    add_lastlog_ex ((uid_t)-1, &ll, &ll_ex);
+    add_lastlog_ex ((uid_t)(((uid_t)-1) / (uid_t)2), &ll, &ll_ex);
 
     uid_t p = 0;
     for (p = 0; p < UID_MAX / 100000; ++p) {
-        ll_add_ex (p, &ll, &ll_ex);
+        add_lastlog_ex (p, &ll, &ll_ex);
     }
 }
