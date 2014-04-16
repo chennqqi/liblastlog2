@@ -112,8 +112,8 @@ static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct l
     }
 
     struct iovec iov[2] = {
-        { .iov_base = ll, .iov_len = sizeof (*ll) },
-        { .iov_base = ll_ex, .iov_len = sizeof (*ll_ex) }
+        { .iov_base = (void *) ll, .iov_len = sizeof (*ll) },
+        { .iov_base = (void *) ll_ex, .iov_len = sizeof (*ll_ex) }
     };
 
     memset (ll, 0, sizeof (*ll));
@@ -185,7 +185,8 @@ repeat: ;
     /* Don't care about extension. */
     if (ll_ex == NULL) {
         const ssize_t n = write (ll_fd, ll, sizeof (*ll));
-        if ((n == -1) || n < (ssize_t)sizeof(*ll)) {
+        /* Allow reading of extended record as a non extended record */
+        if ((n == -1) || n < (ssize_t)(sizeof(*ll))) {
             close (ll_fd);
             perror ("write fail");
             return -1;
@@ -195,21 +196,20 @@ repeat: ;
     }
 
     struct iovec iov[2] = {
-        { .iov_base = ll, .iov_len = sizeof (*ll) },
-        { .iov_base = ll_ex, .iov_len = sizeof (*ll_ex) }
+        { .iov_base = (void *) ll, .iov_len = sizeof (*ll) },
+        { .iov_base = (void *) ll_ex, .iov_len = sizeof (*ll_ex) }
     };
     const ssize_t n = writev (ll_fd, iov, (sizeof (iov) / sizeof (iov[0])));
-    if ((n == -1) || n != (sizeof (*ll) + sizeof (*ll_ex)))
+    close (ll_fd);
+    /* Allow more extension in future. */
+    if ((n == -1) || n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex)))
     {
         perror ("fail");
-        close (ll_fd);
         return -1;
     } else {
-        close (ll_fd);
         return 1;
     }
 
-    close (ll_fd);
     return -1;
 }
 
