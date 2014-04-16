@@ -8,8 +8,11 @@
 #include <string.h>
 
 #include <lastlog.h>
-
 #include <stdio.h>
+
+
+#include "lastlog2.h"
+
 
 #define QUOTE(name) #name
 #define STR(macro) QUOTE(macro)
@@ -24,13 +27,7 @@
 #define LASTLOG_PATH_LEN_PLUS (LASTLOG_PATH + 1)
 #define LASTLOG_FILE_LEN_PLUS (LASTLOG_FILE_LEN + 1)
 
-struct ll_extension {
-    unsigned int extension_id;
-    unsigned long fail_logs;
-    char reserved[512];
-};
-
-/* TODO: move to header file. Add attributes. */
+/* Internal functions */
 static int add_lastlog_impl (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex);
 static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex);
 
