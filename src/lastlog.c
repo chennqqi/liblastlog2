@@ -3,9 +3,9 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
 #include <assert.h>
 #include <string.h>
+#include <sys/file.h>
 
 #include <lastlog.h>
 #include <stdio.h>
@@ -27,11 +27,35 @@
 #define LASTLOG_PATH_LEN_PLUS (LASTLOG_PATH + 1)
 #define LASTLOG_FILE_LEN_PLUS (LASTLOG_FILE_LEN + 1)
 
+#define EXTENSION_MAGIC 1
+
 /* Internal functions */
 static int add_lastlog_impl (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex);
 static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex);
 
-#define EXTENSION_MAGIC 1
+static int lock_lastlog_read (const int ll_fd);
+static int unlock_lastlog_read (const int ll_fd);
+static int lock_lastlog_write (const int ll_fd);
+static int unlock_lastlog_write (const int ll_fd);
+
+static int lock_lastlog_read (const int ll_fd)
+{
+    flock (ll_fd, LOCK_SH);
+}
+
+static int unlock_lastlog_read (const int ll_fd)
+{
+    flock (ll_fd, LOCK_UN);
+}
+
+static int lock_lastlog_write (const int ll_fd)
+{
+    flock (ll_fd, LOCK_EX);
+}
+static int unlock_lastlog_write (const int ll_fd)
+{
+    flock (ll_fd, LOCK_UN);
+}
 
 static inline uid_t get_uid_dir (uid_t uid)
 {
@@ -75,10 +99,13 @@ static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct l
         return -1;
     }
 
+    lock_lastlog_read (ll_fd);
+
     struct stat st = {0};
     if ((fstat (ll_fd, &st) == -1) 
         || (st.st_size < (off_t)sizeof (*ll)))
     {
+        unlock_lastlog_read (ll_fd);
         close (ll_fd);
         perror ("stat");
         return -1;
@@ -89,22 +116,28 @@ static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct l
         memset (ll, 0, sizeof(*ll));
         const ssize_t n = read (ll_fd, ll, sizeof(*ll));
         if ((n == -1) || (n != sizeof(*ll))) {
+            unlock_lastlog_read (ll_fd);
             close (ll_fd);
             perror ("read record");
             return -1;
         }
 
+        unlock_lastlog_read (ll_fd);
         close (ll_fd);
         return 1;
     }
 
     /* Don't care about extensions. But size if bigger than expected... */
     if (ll_ex == NULL) {
+        unlock_lastlog_read (ll_fd);
+        close (ll_fd);
         return -1;
     }
 
     /* Format with extensions */
     if (st.st_size < (off_t)(sizeof (*ll) + sizeof (*ll_ex))) {
+        unlock_lastlog_read (ll_fd);
+        close (ll_fd);
         return -1;
     }
 
@@ -116,19 +149,23 @@ static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct l
     memset (ll, 0, sizeof (*ll));
     memset (ll_ex, 0, sizeof (*ll_ex));
     const ssize_t n = readv (ll_fd, iov, (sizeof (iov) / sizeof (iov[0])));
-    if ((n == -1) || (n != (sizeof (*ll) + sizeof (*ll_ex)))) {
+    /* Allow more extension in future. */
+    if ((n == -1) || (n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex)))) {
+        unlock_lastlog_read (ll_fd);
         close (ll_fd);
         perror ("read record");
         return -1;
     }
+    unlock_lastlog_read (ll_fd);
     close (ll_fd);
 
-    if (!check_extension (ll_ex->extension_id))
+    if (check_extension (ll_ex->extension_id))
     {
-        return -1;
+        return 1;
     }
 
-    return 1;
+    /* Be like negative at all cost. */
+    return -1;
 }
 
 inline int add_lastlog (const uid_t uid, const struct lastlog *const ll)
@@ -170,6 +207,7 @@ repeat: ;
         return -1;
     }
 
+
     sprintf (true_path, "/proc/self/fd/%u/%u", dir_fd, uid);
     const int ll_fd = open (true_path, O_WRONLY | O_CREAT | O_CLOEXEC | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (ll_fd == -1) {
@@ -179,15 +217,19 @@ repeat: ;
     }
     close (dir_fd);
 
+    lock_lastlog_write (ll_fd);
+
     /* Don't care about extension. */
     if (ll_ex == NULL) {
         const ssize_t n = write (ll_fd, ll, sizeof (*ll));
         /* Allow reading of extended record as a non extended record */
         if ((n == -1) || n < (ssize_t)(sizeof(*ll))) {
+            unlock_lastlog_write (ll_fd);
             close (ll_fd);
             perror ("write fail");
             return -1;
         }
+        unlock_lastlog_write (ll_fd);
         close (ll_fd);
         return 1;
     }
@@ -197,8 +239,10 @@ repeat: ;
         { .iov_base = (void *) ll_ex, .iov_len = sizeof (*ll_ex) }
     };
     const ssize_t n = writev (ll_fd, iov, (sizeof (iov) / sizeof (iov[0])));
+
+    unlock_lastlog_write (ll_fd);
+
     close (ll_fd);
-    /* Allow more extension in future. */
     if ((n == -1) || n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex)))
     {
         perror ("fail");
