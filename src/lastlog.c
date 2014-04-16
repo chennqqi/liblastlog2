@@ -185,7 +185,8 @@ static int add_lastlog_impl (const uid_t uid, const struct lastlog *const ll, co
     const uid_t uid_dir = get_uid_dir (uid);
     /* We use one \0 char for \ char in sprintf. */
     char ll_path[LASTLOG_PATH_LEN] = {0};
-    /* So... we have 3 NUL chars for free.. one we use for /. Second we use as normal and... */
+    /* So... we have 3 NUL free chars.. one is used for backsladh . Second is used as normal
+     * terminating char and third is removed. */
     char true_path[sizeof ("/proc/self/fd/") + sizeof (STR (INT_MAX)) + sizeof (STR (UID_MAX)) - 1];
     sprintf (ll_path, "%s%u", LASTLOG_PATH, uid_dir);
 
