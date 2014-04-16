@@ -228,7 +228,7 @@ repeat: ;
     /* Don't care about extension. */
     if (ll_ex == NULL) {
         const ssize_t n = write (ll_fd, ll, sizeof (*ll));
-        /* Allow reading of extended record as a non extended record */
+        /* Allow reading of extended record as a non-extended record. */
         if ((n == -1) || n < (ssize_t)(sizeof(*ll))) {
             unlock_lastlog_write (ll_fd);
             close (ll_fd);
