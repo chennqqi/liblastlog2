@@ -6,8 +6,8 @@
 #include <assert.h>
 #include <string.h>
 #include <sys/file.h>
-
 #include <lastlog.h>
+#include <errno.h>
 #include <stdio.h>
 
 
@@ -185,9 +185,6 @@ static int add_lastlog_impl (const uid_t uid, const struct lastlog *const ll, co
     const uid_t uid_dir = get_uid_dir (uid);
     /* We use one \0 char for \ char in sprintf. */
     char ll_path[LASTLOG_PATH_LEN] = {0};
-    /* So... we have 3 NUL free chars.. one is used for backsladh . Second is used as normal
-     * terminating char and third is removed. */
-    char true_path[sizeof ("/proc/self/fd/") + sizeof (STR (INT_MAX)) + sizeof (STR (UID_MAX)) - 1];
     sprintf (ll_path, "%s%u", LASTLOG_PATH, uid_dir);
 
     int checked = 0;
@@ -214,7 +211,9 @@ repeat: ;
         return -1;
     }
 
-
+    /* So... we have 3 NUL free chars.. one is used for backsladh . Second is used as normal
+     * terminating char and third is removed. */
+    char true_path[sizeof ("/proc/self/fd/") + sizeof (STR (INT_MAX)) + sizeof (STR (UID_MAX)) - 1];
     sprintf (true_path, "/proc/self/fd/%u/%u", dir_fd, uid);
     const int ll_fd = open (true_path, O_WRONLY | O_CREAT | O_CLOEXEC | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (ll_fd == -1) {
