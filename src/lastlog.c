@@ -197,7 +197,13 @@ repeat: ;
     const int dir_fd = open (ll_path, O_DIRECTORY | O_NOFOLLOW);
     if (!checked && (dir_fd == -1)) {
         if (mkdir (ll_path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) != 0) {
+            /* What if another process created directory? */
+            if (errno == EEXIST) {
+                checked = 1;
+                goto repeat;
+            }
             perror ("create dir");
+            return -1;
         }
         checked = 1;
         goto repeat;
