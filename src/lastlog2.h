@@ -6,6 +6,8 @@ struct ll_extension {
     char reserved[512];
 };
 
+#define UID_MAX ((uid_t) -1)
+
 /* TODO:  Add attributes. */
 /* Public accessible functions. */
 inline int get_lastlog (const uid_t uid, struct lastlog *const ll);
