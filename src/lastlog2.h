@@ -10,10 +10,10 @@ struct ll_extension {
 
 /* TODO:  Add attributes. */
 /* Public accessible functions. */
-inline int get_lastlog (const uid_t uid, struct lastlog *const ll);
-inline int get_lastlog_ex (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex);
+inline int getlstlogent (const uid_t uid, struct lastlog *const ll);
+inline int getlstlogentx (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex);
 
-inline int add_lastlog (const uid_t uid, const struct lastlog *const ll);
-inline int add_lastlog_ex (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex);
+inline int putlstlogent (const uid_t uid, const struct lastlog *const ll);
+inline int putlstlogentx (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex);
 
 #endif /* _H_LASTLOG2_ */

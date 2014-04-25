@@ -30,8 +30,8 @@
 #define EXTENSION_MAGIC 1
 
 /* Internal functions */
-static int add_lastlog_impl (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex);
-static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex);
+static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex);
+static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex);
 
 static int try_create_lastlog_dir (const char *const ll_path);
 
@@ -83,17 +83,17 @@ static int check_extension(unsigned int extension_id)
     abort();
 }
 
-inline int get_lastlog (const uid_t uid, struct lastlog *const ll)
+inline int getlstlogent (const uid_t uid, struct lastlog *const ll)
 {
-    return get_lastlog_impl (uid, ll, NULL);
+    return getlstlogent_impl (uid, ll, NULL);
 }
 
-inline int get_lastlog_ex (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex)
+inline int getlstlogentx (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex)
 {
-    return get_lastlog_impl (uid, ll, ll_ex);
+    return getlstlogent_impl (uid, ll, ll_ex);
 }
 
-static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex)
+static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex)
 {
     assert (ll != NULL);
 
@@ -183,17 +183,17 @@ static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct l
     return -1;
 }
 
-inline int add_lastlog (const uid_t uid, const struct lastlog *const ll)
+inline int putlstlogent (const uid_t uid, const struct lastlog *const ll)
 {
-    return add_lastlog_impl (uid, ll, NULL);
+    return putlstlogent_impl (uid, ll, NULL);
 }
 
-inline int add_lastlog_ex (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex)
+inline int putlstlogentx (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex)
 {
-    return add_lastlog_impl (uid, ll, ll_ex);
+    return putlstlogent_impl (uid, ll, ll_ex);
 }
 
-static int add_lastlog_impl (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex)
+static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex)
 {
     assert (ll != NULL);
 
