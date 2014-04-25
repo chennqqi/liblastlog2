@@ -29,10 +29,6 @@
 
 #define EXTENSION_MAGIC 1
 
-static __thread int lock_ll_fd = -1;
-#define LOCK_LASTLOG    ({ lock_lastlog_wr (dir_fd, uid); })
-#define UNLOCK_LASTLOG  unlock_lastlog_wr (dir_fd, uid)
-
 /* Internal functions */
 static int add_lastlog_impl (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex);
 static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex);
@@ -43,45 +39,6 @@ static inline uid_t get_uid_dir (uid_t uid)
 {
     return (uid - (uid % 1000));
 }
-
-static int lock_lastlog_wr (const int dir_fd, const uid_t uid)
-{
-    /* Well... I'm pig. */
-    char ll_file [sizeof_strs ("/proc/self/fd//.lock", STR (INT_MAX), STR (UID_MAX))] = {0}; 
-    sprintf (ll_file, "/proc/self/fd/%u/%u.lock", dir_fd, uid);
-
-    const int ll_fd = open (ll_file, O_WRONLY | O_CREAT | O_NOFOLLOW, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-    if (ll_fd == -1) {
-        return -1;
-    }
- 
-    struct flock ll_lock = {0};
-    ll_lock.l_type = F_WRLCK;
-    ll_lock.l_whence = SEEK_SET;
-
-    fcntl (ll_fd, F_SETLKW, &ll_lock);
-    lock_ll_fd = ll_fd;
-
-    return 1;
-}
-
-static void unlock_lastlog_wr (const int dir_fd, const uid_t uid)
-{
-    assert (lock_ll_fd != -1);
-
-    char ll_file [sizeof_strs ("/proc/self/fd//.lock", STR (INT_MAX), STR (UID_MAX))] = {0}; 
-    sprintf (ll_file, "/proc/self/fd/%u/%u.lock", dir_fd, uid);
-
-    struct flock ll_lock = {0};
-    ll_lock.l_type = F_UNLCK;
-    ll_lock.l_whence = SEEK_SET;
-
-    fcntl (lock_ll_fd, F_SETLKW, &ll_lock);
-
-    close (lock_ll_fd);
-    lock_ll_fd = -1;
-}
-
 
 static int try_create_lastlog_dir (const char *const ll_path)
 {
@@ -151,6 +108,22 @@ static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct l
         return -1;
     }
 
+    /* All other attributes are set by initialization. */
+    struct flock ll_lock = {0};
+    ll_lock.l_type = F_RDLCK;
+    ll_lock.l_whence = SEEK_SET;
+    /*
+       As well as being removed by an explicit F_UNLCK, record locks are auto‐
+       matically released when the process terminates or if it closes any file
+       descriptor referring to a file on which locks are held.
+    */
+    if (fcntl (ll_fd, F_SETLK, &ll_lock) == -1) {
+        saved_errno = errno;
+        close (ll_fd);
+        errno = saved_errno;
+        return -1;
+    }
+
     struct stat st = {0};
     if ((fstat (ll_fd, &st) == -1) 
         || (st.st_size < (off_t)sizeof (*ll)))
@@ -167,7 +140,6 @@ static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct l
         const ssize_t n = read (ll_fd, ll, sizeof(*ll));
         if ((n == -1) || (n != sizeof(*ll))) {
             close (ll_fd);
-            perror ("read record");
             return -1;
         }
 
@@ -198,7 +170,6 @@ static int get_lastlog_impl (const uid_t uid, struct lastlog *const ll, struct l
     /* Allow more extension in future. */
     if ((n == -1) || (n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex)))) {
         close (ll_fd);
-        perror ("read record");
         return -1;
     }
     close (ll_fd);
@@ -239,43 +210,37 @@ static int add_lastlog_impl (const uid_t uid, const struct lastlog *const ll, co
         return -1;
     }
 
-    LOCK_LASTLOG;
+    /* ... + 1 for slash char */
+    char ll_file [ sizeof_strs("/proc/self/fd/", STR (INT_MAX), STR (UID_MAX)) + 1] = {0};
+    sprintf (ll_file, "/proc/self/fd/%u/%u", dir_fd, uid);
+    const int ll_fd = open (ll_file, O_WRONLY | O_CREAT | O_CLOEXEC | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (ll_fd == -1) {
+        return -1;
+    }
 
-    /* Create temporary file for lastlog records. */
-    char tmp_file [sizeof_strs ("/proc/self/fd/", STR (INT_MAX), "/lastlog-XXXXXX")] = {0};
-    sprintf (tmp_file, "/proc/self/fd/%u/lastlog-XXXXXX", dir_fd);
-    const int tmp_fd = mkstemp (tmp_file);
-    saved_errno = errno;
-
-    if (tmp_fd == -1) {
-        UNLOCK_LASTLOG;
-        close (dir_fd);
+    /* All other attributes are set by initialization. */
+    struct flock ll_lock = {0};
+    ll_lock.l_type = F_WRLCK;
+    ll_lock.l_whence = SEEK_SET;
+    /* From man pages:
+       As well as being removed by an explicit F_UNLCK, record locks are auto‐
+       matically released when the process terminates or if it closes any file
+       descriptor referring to a file on which locks are held.
+    */
+    if (fcntl (ll_fd, F_SETLKW, &ll_lock) == -1) {
+        saved_errno = errno;
+        close (ll_fd);
         errno = saved_errno;
         return -1;
     }
 
-    char lastlog_file [sizeof_strs ("/proc/self/fd/", STR (INT_MAX), STR (UID_MAX)) + 1] = {0};
-    sprintf (lastlog_file, "/proc/self/fd/%u/%u", dir_fd, uid);
-
     /* Don't care about extension. */
     if (ll_ex == NULL) {
-        const ssize_t n = write (tmp_fd, ll, sizeof (*ll));
+        const ssize_t n = write (ll_fd, ll, sizeof (*ll));
         saved_errno = errno;
-        close (tmp_fd);
+        close (ll_fd);
         /* Allow reading of extended record as a non-extended record. */
         if ((n == -1) || (n < (ssize_t)(sizeof(*ll)))) {
-            unlink (tmp_file);
-            UNLOCK_LASTLOG;
-            close (dir_fd);
-            errno = saved_errno;
-            return -1;
-        }
-
-        /* This operation is atomic but we don't know if file in directory is same as our filedescriptor... */
-        if (rename (tmp_file, lastlog_file) == -1) {
-            saved_errno = errno;
-            unlink (tmp_file);
-            UNLOCK_LASTLOG;
             close (dir_fd);
             errno = saved_errno;
             return -1;
@@ -290,30 +255,16 @@ static int add_lastlog_impl (const uid_t uid, const struct lastlog *const ll, co
             { .iov_base = (void *) ll, .iov_len = sizeof (*ll) },
             { .iov_base = (void *) ll_ex, .iov_len = sizeof (*ll_ex) }
         };
-        const ssize_t n = writev (tmp_fd, iov, (sizeof (iov) / sizeof (iov[0])));
+        const ssize_t n = writev (ll_fd, iov, (sizeof (iov) / sizeof (iov[0])));
         saved_errno = errno;
-        close (tmp_fd);
-
+        close (ll_fd);
         if ((n == -1) || (n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex))))
         {
-            unlink (tmp_file);
-            UNLOCK_LASTLOG;
             close (dir_fd);
             errno = saved_errno;
             return -1;
         }
 
-        /* This operation is atomic but we don't know if file in directory is same as our filedescriptor... */
-        if (rename (tmp_file, lastlog_file) == -1) {
-            saved_errno = errno;
-            unlink (tmp_file);
-            UNLOCK_LASTLOG;
-            close (dir_fd);
-            errno = saved_errno;
-            return -1;
-        }
-
-        UNLOCK_LASTLOG;
         close (dir_fd);
         return 1;
     }

@@ -18,7 +18,7 @@ int main (int argc, char **argv)
     add_lastlog_ex ((uid_t)(((uid_t)-1) / (uid_t)2), &ll, &ll_ex);
 
     uid_t p = 0;
-    for (p = 0; p < UID_MAX / 100000; ++p) {
+    for (p = 0; p < UID_MAX / 10000; ++p) {
         add_lastlog_ex (p, &ll, &ll_ex);
     }
 }
