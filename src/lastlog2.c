@@ -12,22 +12,38 @@
 
 #include "lastlog2.h"
 
-
 #define QUOTE(name) #name
 #define STR(macro) QUOTE(macro)
 
 #define LASTLOG_PATH "/tmp/var/log/lastlog2/"
 
-#define LASTLOG_PATH_LEN (sizeof (LASTLOG_PATH) + sizeof (STR (UID_MAX)) - 1)
-#define LASTLOG_FILE_LEN (LASTLOG_PATH_LEN + sizeof(STR (UID_MAX)) - 1)
-
-/* +1 for slash char */
-#define LASTLOG_PATH_LEN_PLUS (LASTLOG_PATH + 1)
-#define LASTLOG_FILE_LEN_PLUS (LASTLOG_FILE_LEN + 1)
-
-#define sizeof_strs(x, y, z)    ((sizeof((x)) - 1) + (sizeof((y)) - 1) + (sizeof((z))))
+#define sizeof_strs2(x, y)      ((sizeof((x)) - 1) + sizeof((y)))
+#define sizeof_strs3(x, y, z)   ((sizeof((x)) - 1) + (sizeof((y)) - 1) + (sizeof((z))))
 
 #define EXTENSION_MAGIC 1
+
+#define LOCK_LASTLOG \
+    struct flock ll_lock = {0}; \
+    /* All other attributes are set by initialization. */ \
+    ll_lock.l_type = F_RDLCK; \
+    ll_lock.l_whence = SEEK_SET; \
+    if (fcntl (ll_fd, F_SETLK, &ll_lock) == -1)
+
+#define LOCK_LASTLOG_WRITE \
+    struct flock ll_lock = {0}; \
+    /* All other attributes are set by initialization. */ \
+    ll_lock.l_type = F_WRLCK; \
+    ll_lock.l_whence = SEEK_SET; \
+    if (fcntl (ll_fd, F_SETLKW, &ll_lock) == -1)
+
+#define UNLOCK_LASTLOG \
+    do { \
+        struct flock ll_lock = {0}; \
+        ll_lock.l_type = F_UNLCK; \
+        ll_lock.l_whence = SEEK_SET; \
+        fcntl (ll_fd, F_SETLK, &ll_lock); \
+    } while (0)
+
 
 /* Internal functions */
 static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex);
@@ -100,7 +116,8 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
     int saved_errno = 0;
 
     const uid_t uid_dir = get_uid_dir (uid);
-    char path[LASTLOG_FILE_LEN_PLUS] = {0};
+    /* ... +1 for slash char */
+    char path[sizeof_strs3 (LASTLOG_PATH, STR (UID_MAX), STR (UID_MAX)) + 1] = {0};
     sprintf (path, "%s%u/%u", LASTLOG_PATH, uid_dir, uid);
 
     const int ll_fd = open (path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
@@ -108,19 +125,12 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
         return -1;
     }
 
-    /* All other attributes are set by initialization. */
-    struct flock ll_lock = {0};
-    ll_lock.l_type = F_RDLCK;
-    ll_lock.l_whence = SEEK_SET;
-    /*
-       As well as being removed by an explicit F_UNLCK, record locks are auto‐
-       matically released when the process terminates or if it closes any file
-       descriptor referring to a file on which locks are held.
-    */
-    if (fcntl (ll_fd, F_SETLK, &ll_lock) == -1) {
-        saved_errno = errno;
+    
+    LOCK_LASTLOG
+    {
+        /* FAIL */
         close (ll_fd);
-        errno = saved_errno;
+        errno = ENOLCK;
         return -1;
     }
 
@@ -129,6 +139,9 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
         || (st.st_size < (off_t)sizeof (*ll)))
     {
         saved_errno = errno;
+
+        UNLOCK_LASTLOG;
+
         close (ll_fd);
         errno = saved_errno;
         return -1;
@@ -139,22 +152,26 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
         memset (ll, 0, sizeof(*ll));
         const ssize_t n = read (ll_fd, ll, sizeof(*ll));
         if ((n == -1) || (n != sizeof(*ll))) {
+            UNLOCK_LASTLOG;
             close (ll_fd);
             return -1;
         }
 
+        UNLOCK_LASTLOG;
         close (ll_fd);
         return 1;
     }
 
     /* Don't care about extensions. But size if bigger than expected... */
     if (ll_ex == NULL) {
+        UNLOCK_LASTLOG;
         close (ll_fd);
         return -1;
     }
 
     /* Format with extensions */
     if (st.st_size < (off_t)(sizeof (*ll) + sizeof (*ll_ex))) {
+        UNLOCK_LASTLOG;
         close (ll_fd);
         return -1;
     }
@@ -167,12 +184,15 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
     memset (ll, 0, sizeof (*ll));
     memset (ll_ex, 0, sizeof (*ll_ex));
     const ssize_t n = readv (ll_fd, iov, (sizeof (iov) / sizeof (iov[0])));
+    saved_errno = errno;
+    close (ll_fd);
+    UNLOCK_LASTLOG;
+
     /* Allow more extension in future. */
     if ((n == -1) || (n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex)))) {
-        close (ll_fd);
+        errno = saved_errno;
         return -1;
     }
-    close (ll_fd);
 
     if (check_extension (ll_ex->extension_id))
     {
@@ -201,8 +221,7 @@ static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, c
 
     const uid_t uid_dir = get_uid_dir (uid);
 
-    /* No backslash. */
-    char ll_path[LASTLOG_PATH_LEN] = {0};
+    char ll_path[sizeof_strs2 (LASTLOG_PATH, STR (UID_MAX))] = {0};
     sprintf (ll_path, "%s%u", LASTLOG_PATH, uid_dir);
 
     const int dir_fd = try_create_lastlog_dir (ll_path);
@@ -211,23 +230,15 @@ static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, c
     }
 
     /* ... + 1 for slash char */
-    char ll_file [ sizeof_strs("/proc/self/fd/", STR (INT_MAX), STR (UID_MAX)) + 1] = {0};
+    char ll_file [ sizeof_strs3("/proc/self/fd/", STR (INT_MAX), STR (UID_MAX)) + 1] = {0};
     sprintf (ll_file, "/proc/self/fd/%u/%u", dir_fd, uid);
     const int ll_fd = open (ll_file, O_WRONLY | O_CREAT | O_CLOEXEC | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (ll_fd == -1) {
         return -1;
     }
 
-    /* All other attributes are set by initialization. */
-    struct flock ll_lock = {0};
-    ll_lock.l_type = F_WRLCK;
-    ll_lock.l_whence = SEEK_SET;
-    /* From man pages:
-       As well as being removed by an explicit F_UNLCK, record locks are auto‐
-       matically released when the process terminates or if it closes any file
-       descriptor referring to a file on which locks are held.
-    */
-    if (fcntl (ll_fd, F_SETLKW, &ll_lock) == -1) {
+    LOCK_LASTLOG_WRITE
+    {
         saved_errno = errno;
         close (ll_fd);
         errno = saved_errno;
@@ -238,6 +249,9 @@ static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, c
     if (ll_ex == NULL) {
         const ssize_t n = write (ll_fd, ll, sizeof (*ll));
         saved_errno = errno;
+
+        UNLOCK_LASTLOG;
+
         close (ll_fd);
         /* Allow reading of extended record as a non-extended record. */
         if ((n == -1) || (n < (ssize_t)(sizeof(*ll)))) {
@@ -257,6 +271,7 @@ static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, c
         };
         const ssize_t n = writev (ll_fd, iov, (sizeof (iov) / sizeof (iov[0])));
         saved_errno = errno;
+        UNLOCK_LASTLOG;
         close (ll_fd);
         if ((n == -1) || (n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex))))
         {
