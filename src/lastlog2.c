@@ -5,7 +5,6 @@
 #include <fcntl.h>
 #include <assert.h>
 #include <string.h>
-#include <lastlog.h>
 #include <errno.h>
 #include <stdio.h>
 #include <sys/uio.h>

@@ -1,5 +1,8 @@
 #ifndef _H_LASTLOG2_
 #define _H_LASTLOG2_
+
+#include <lastlog.h>
+
 struct ll_extension {
     unsigned int extension_id;
     unsigned long fail_logs;
