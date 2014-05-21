@@ -18,7 +18,9 @@ int main (int argc, char **argv)
     putlstlogentx ((uid_t)(((uid_t)-1) / (uid_t)2), &ll, &ll_ex);
 
     uid_t p = 0;
-    for (p = 0; p < UID_MAX / 10000; ++p) {
-        putlstlogentx (p, &ll, &ll_ex);
+    for (p = 0; p < UID_MAX / 1000; ++p) {
+        if (putlstlogentx (p, &ll, &ll_ex) == -1) {
+            perror ("aaa");
+        }
     }
 }

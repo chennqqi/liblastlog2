@@ -1,2 +1,2 @@
 all:
-	gcc -o test test.c -llastlog2 -L../ -I../
+	gcc -ggdb3 -o test test.c -llastlog2 -L../ -I../
