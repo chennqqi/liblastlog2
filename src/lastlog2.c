@@ -229,8 +229,8 @@ static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, c
     }
 
     /* ... + 1 for slash char */
-    char ll_file [ sizeof_strs3("/proc/self/fd/", STR (INT_MAX), STR (UID_MAX)) + 1] = {0};
-    sprintf (ll_file, "/proc/self/fd/%u/%u", dir_fd, uid);
+    char ll_file [ sizeof_strs3("/dev/fd/", STR (INT_MAX), STR (UID_MAX)) + 1] = {0};
+    sprintf (ll_file, "/dev/fd/%u/%u", dir_fd, uid);
     const int ll_fd = open (ll_file, O_WRONLY | O_CREAT | O_CLOEXEC | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (ll_fd == -1) {
         return -1;
