@@ -124,6 +124,29 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
         return -1;
     }
 
+    struct stat st;
+    if (fstat (ll_fd, &st) == -1) {
+        saved_errno = errno;
+        close (ll_fd);
+        errno = saved_errno;
+        return -1;
+    }
+
+    if (!S_ISREG(st.st_mode)) {
+        close (ll_fd);
+        errno = ENOENT;
+        return -1;
+    }
+
+    if (st.st_size < (off_t)sizeof (*ll)) {
+        saved_errno = errno;
+
+        UNLOCK_LASTLOG;
+
+        close (ll_fd);
+        errno = saved_errno;
+        return -1;
+    }
     
     LOCK_LASTLOG
     {
@@ -133,18 +156,6 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
         return -1;
     }
 
-    struct stat st = {0};
-    if ((fstat (ll_fd, &st) == -1) 
-        || (st.st_size < (off_t)sizeof (*ll)))
-    {
-        saved_errno = errno;
-
-        UNLOCK_LASTLOG;
-
-        close (ll_fd);
-        errno = saved_errno;
-        return -1;
-    }
 
     /* Plain old format. */
     if (st.st_size == sizeof(*ll)) {
@@ -161,14 +172,14 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
         return 1;
     }
 
-    /* Don't care about extensions. But size if bigger than expected... */
+    /* Don't care about extensions. Even if size if bigger than expected... */
     if (ll_ex == NULL) {
         UNLOCK_LASTLOG;
         close (ll_fd);
         return -1;
     }
 
-    /* Format with extensions */
+    /* Format with extensions. */
     if (st.st_size < (off_t)(sizeof (*ll) + sizeof (*ll_ex))) {
         UNLOCK_LASTLOG;
         close (ll_fd);
@@ -188,8 +199,12 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
     UNLOCK_LASTLOG;
 
     /* Allow more extension in future. */
-    if ((n == -1) || (n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex)))) {
+    if (n == -1) {
         errno = saved_errno;
+        return -1;
+    }
+
+    if (n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex))) {
         return -1;
     }
 
@@ -229,10 +244,22 @@ static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, c
     }
 
     /* ... + 1 for slash char */
-    char ll_file [ sizeof_strs3("/dev/fd/", STR (INT_MAX), STR (UID_MAX)) + 1] = {0};
+    char ll_file [sizeof_strs3("/dev/fd/", STR (INT_MAX), STR (UID_MAX)) + 1] = {0};
     sprintf (ll_file, "/dev/fd/%u/%u", dir_fd, uid);
     const int ll_fd = open (ll_file, O_WRONLY | O_CREAT | O_CLOEXEC | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (ll_fd == -1) {
+        return -1;
+    }
+
+    struct stat st;
+    if (fstat(ll_fd, &st) == -1) {
+        close (ll_fd);
+        return -1;
+    }
+
+    if (!S_ISREG(st.st_mode)) {
+        close (ll_fd);
+        errno = ENOENT;
         return -1;
     }
 
