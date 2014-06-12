@@ -58,32 +58,47 @@ static inline uid_t get_uid_dir (uid_t uid)
 static int try_create_lastlog_dir (const char *const ll_path)
 {
     int checked = 0;
-    /* We like C right? ; is just empty statement... is better than empty block. */
+    /* Repeat statement is for 2 purposes here. */
 repeat: ;
     /* Here is little race condition */
     const int dir_fd = open (ll_path, O_DIRECTORY | O_NOFOLLOW);
-    const int saved_errno = errno;
+    int saved_errno = errno;
+
+    if ((dir_fd == -1) && (saved_errno == EINTR)) {
+        goto repeat;
+    }
 
     if (!checked && (dir_fd == -1)) {
+        /* Don't try to create dir when those errnos happened. */
+        switch (saved_errno) {
+            case EACCES:
+            case ENOTDIR:
+            case ELOOP:
+                errno = saved_errno;
+                return -1;
+        }
+
         if (mkdir (ll_path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) != 0) {
             /* What if another process created directory? */
-            if (errno == EEXIST) {
+            saved_errno = errno;
+            if (saved_errno == EEXIST) {
                 checked = 1;
-                /* FIX? Well. Someone could remove directory while another round of checking. */
+                /* Well. Someone could remove directory while another round of checking. */
                 goto repeat;
             }
+            errno = saved_errno;
             return -1;
         }
         checked = 1;
         goto repeat;
     }
 
-    if (dir_fd == -1) {
-        errno = saved_errno;
-        return -1;
+    if (dir_fd != -1) {
+        return dir_fd;
     }
 
-    return dir_fd;
+    errno = saved_errno;
+    return -1;
 }
 
 static int check_extension(unsigned int extension_id)
@@ -112,15 +127,19 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
 {
     assert (ll != NULL);
 
-    int saved_errno = 0;
 
     const uid_t uid_dir = get_uid_dir (uid);
     /* ... +1 for slash char */
     char path[sizeof_strs3 (LASTLOG_PATH, STR (UID_MAX), STR (UID_MAX)) + 1] = {0};
     sprintf (path, "%s%u/%u", LASTLOG_PATH, uid_dir, uid);
 
+try_open_again: ;
     const int ll_fd = open (path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    int saved_errno = errno;
     if (ll_fd == -1) {
+        if (saved_errno == EINTR) {
+            goto try_open_again;
+        }
         return -1;
     }
 
@@ -201,7 +220,6 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
     /* Allow more extension in future. */
     if (n == -1) {
         errno = saved_errno;
-        return -1;
     }
 
     if (n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex))) {
@@ -231,7 +249,6 @@ static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, c
 {
     assert (ll != NULL);
 
-    int saved_errno = 0;
 
     const uid_t uid_dir = get_uid_dir (uid);
 
@@ -246,10 +263,19 @@ static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, c
     /* ... + 1 for slash char */
     char ll_file [sizeof_strs3("/dev/fd/", STR (INT_MAX), STR (UID_MAX)) + 1] = {0};
     sprintf (ll_file, "/dev/fd/%u/%u", dir_fd, uid);
+
+try_open_again: ;
     const int ll_fd = open (ll_file, O_WRONLY | O_CREAT | O_CLOEXEC | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    int saved_errno = errno;
     if (ll_fd == -1) {
+        if (saved_errno == EINTR) {
+            goto try_open_again;
+        }
+        close (dir_fd);
         return -1;
     }
+    /* Close dir handle here. */
+    close (dir_fd);
 
     struct stat st;
     if (fstat(ll_fd, &st) == -1) {
@@ -259,8 +285,7 @@ static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, c
 
     if (!S_ISREG(st.st_mode)) {
         close (ll_fd);
-        errno = ENOENT;
-        return -1;
+        return -2;
     }
 
     LOCK_LASTLOG_WRITE
@@ -277,16 +302,18 @@ static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, c
         saved_errno = errno;
 
         UNLOCK_LASTLOG;
-
         close (ll_fd);
+
         /* Allow reading of extended record as a non-extended record. */
-        if ((n == -1) || (n < (ssize_t)(sizeof(*ll)))) {
-            close (dir_fd);
+        if (n == -1) {
             errno = saved_errno;
             return -1;
         }
 
-        close (dir_fd);
+        if (n < (ssize_t)(sizeof(*ll))) {
+            return -2;
+        }
+
         return 1;
 
     } else {
@@ -297,16 +324,19 @@ static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, c
         };
         const ssize_t n = writev (ll_fd, iov, (sizeof (iov) / sizeof (iov[0])));
         saved_errno = errno;
+
         UNLOCK_LASTLOG;
         close (ll_fd);
-        if ((n == -1) || (n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex))))
-        {
-            close (dir_fd);
+
+        if (n == -1) { 
             errno = saved_errno;
             return -1;
         }
 
-        close (dir_fd);
+        if (n < (ssize_t)(sizeof(*ll) + sizeof(*ll_ex))) {
+            return -2;
+        }
+
         return 1;
     }
 
