@@ -220,10 +220,11 @@ try_open_again: ;
     /* Allow more extension in future. */
     if (n == -1) {
         errno = saved_errno;
+        return -1;
     }
 
     if (n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex))) {
-        return -1;
+        return -2;
     }
 
     if (check_extension (ll_ex->extension_id))
