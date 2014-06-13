@@ -174,7 +174,6 @@ try_open_again: ;
         return -1;
     }
 
-
     /* Plain old format. */
     if (st.st_size == sizeof(*ll)) {
         memset (ll, 0, sizeof(*ll));
@@ -216,12 +215,12 @@ try_open_again: ;
     close (ll_fd);
     UNLOCK_LASTLOG;
 
-    /* Allow more extension in future. */
     if (n == -1) {
         errno = saved_errno;
         return -1;
     }
 
+    /* Allow more extension in future. */
     if (n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex))) {
         return -2;
     }
