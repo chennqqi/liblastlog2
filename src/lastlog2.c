@@ -281,7 +281,9 @@ try_open_again: ;
 
     struct stat st;
     if (fstat(ll_fd, &st) == -1) {
+        saved_errno = errno;
         close (ll_fd);
+        errno = saved_errno;
         return -1;
     }
 
@@ -342,5 +344,5 @@ try_open_again: ;
         return 1;
     }
 
-    return -1;
+    return -2;
 }
