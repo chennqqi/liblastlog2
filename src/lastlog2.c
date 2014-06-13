@@ -273,6 +273,7 @@ try_open_again: ;
             goto try_open_again;
         }
         close (dir_fd);
+        errno = saved_errno;
         return -1;
     }
     /* Close dir handle here. */
