@@ -26,14 +26,22 @@
     /* All other attributes are set by initialization. */ \
     ll_lock.l_type = F_RDLCK; \
     ll_lock.l_whence = SEEK_SET; \
-    if (fcntl (ll_fd, F_SETLK, &ll_lock) == -1)
+    int __ret = -1; \
+    do { \
+        __ret = fcntl (ll_fd, F_SETLK, &ll_lock); \
+    } while ((__ret == -1) && (errno == EINTR)); \
+    if (__ret == -1)
 
 #define LOCK_LASTLOG_WRITE \
     struct flock ll_lock = {0}; \
     /* All other attributes are set by initialization. */ \
     ll_lock.l_type = F_WRLCK; \
     ll_lock.l_whence = SEEK_SET; \
-    if (fcntl (ll_fd, F_SETLKW, &ll_lock) == -1)
+    int __ret = -1; \
+    do { \
+        __ret = fcntl (ll_fd, F_SETLKW, &ll_lock); \
+    } while ((__ret == -1) && (errno == EINTR)); \
+    if (__ret == -1)
 
 #define UNLOCK_LASTLOG \
     do { \
