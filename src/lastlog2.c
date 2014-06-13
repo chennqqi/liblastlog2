@@ -133,13 +133,11 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
     char path[sizeof_strs3 (LASTLOG_PATH, STR (UID_MAX), STR (UID_MAX)) + 1] = {0};
     sprintf (path, "%s%u/%u", LASTLOG_PATH, uid_dir, uid);
 
-try_open_again: ;
-    const int ll_fd = open (path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    do {
+        const int ll_fd = open (path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    } while ((ll_fd == -1) && (errno == EINTR));
     int saved_errno = errno;
     if (ll_fd == -1) {
-        if (saved_errno == EINTR) {
-            goto try_open_again;
-        }
         return -1;
     }
 
@@ -314,7 +312,7 @@ try_open_again: ;
 
         if (n < (ssize_t)(sizeof(*ll))) {
             return -2;
-        }
+ctdb/lib/tevent/testsuite.c        }
 
         return 1;
 
