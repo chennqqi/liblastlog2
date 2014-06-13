@@ -233,7 +233,7 @@ try_open_again: ;
     }
 
     /* Be like negative at all cost. */
-    return -1;
+    return -2;
 }
 
 inline int putlstlogent (const uid_t uid, const struct lastlog *const ll)
