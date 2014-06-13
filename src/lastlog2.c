@@ -153,8 +153,7 @@ try_open_again: ;
 
     if (!S_ISREG(st.st_mode)) {
         close (ll_fd);
-        errno = ENOENT;
-        return -1;
+        return -2;
     }
 
     if (st.st_size < (off_t)sizeof (*ll)) {
