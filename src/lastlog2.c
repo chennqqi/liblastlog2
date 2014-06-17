@@ -58,6 +58,38 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
 
 static int try_create_lastlog_dir (const char *const ll_path);
 
+static ssize_t read_all (int fd, void *const buff, ssize_t len)
+{
+    ssize_t total = 0;
+    int ret;
+    while (total < len) {
+        do {
+            ret = read (fd, buff + total, len - total);
+        } while ((ret == -1) && (errno == EINTR));
+        /* Something failed bad... */
+        if (ret <= 0) { return -1; }
+        total += ret;
+    }
+
+    return total;
+}
+
+static ssize_t write_all (int fd, void *const buff, ssize_t len)
+{
+    ssize_t total = 0;
+    int ret;
+    while (total < len) {
+        do {
+            ret = write (fd, buff + total, len - total);
+        } while ((ret == -1) && (errno == EINTR));
+        /* Something failed bad... */
+        if (ret <= 0) { return -1; }
+        total += ret;
+    }
+
+    return total;
+}
+
 static inline uid_t get_uid_dir (uid_t uid)
 {
     return (uid - (uid % 1000));
@@ -96,9 +128,10 @@ repeat: ;
             }
             errno = saved_errno;
             return -1;
+        } else {
+            checked = 1;
+            goto repeat;
         }
-        checked = 1;
-        goto repeat;
     }
 
     if (dir_fd != -1) {
@@ -135,7 +168,6 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
 {
     assert (ll != NULL);
 
-
     const uid_t uid_dir = get_uid_dir (uid);
     /* ... +1 for slash char */
     char path[sizeof_strs3 (LASTLOG_PATH, STR (UID_MAX), STR (UID_MAX)) + 1] = {0};
@@ -149,65 +181,70 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
     if (ll_fd == -1) {
         return -1;
     }
+    
+    LOCK_LASTLOG
+    {
+        /* FAIL */
+        saved_errno = errno;
+        close (ll_fd);
+        errno = saved_errno;
+        return -2;
+    }
 
     struct stat st;
     if (fstat (ll_fd, &st) == -1) {
         saved_errno = errno;
+        UNLOCK_LASTLOG;
         close (ll_fd);
         errno = saved_errno;
         return -1;
     }
 
     if (!S_ISREG(st.st_mode)) {
+        UNLOCK_LASTLOG;
         close (ll_fd);
         return -2;
     }
 
     if (st.st_size < (off_t)sizeof (*ll)) {
-        saved_errno = errno;
-
         UNLOCK_LASTLOG;
-
         close (ll_fd);
-        errno = saved_errno;
-        return -1;
-    }
-    
-    LOCK_LASTLOG
-    {
-        /* FAIL */
-        close (ll_fd);
-        errno = ENOLCK;
-        return -1;
+        return -2;
     }
 
     /* Plain old format. */
-    if (st.st_size == sizeof(*ll)) {
+    if ((st.st_size >= sizeof(*ll)) && (ll_ex == NULL)) {
         memset (ll, 0, sizeof(*ll));
-        const ssize_t n = read (ll_fd, ll, sizeof(*ll));
-        if ((n == -1) || (n != sizeof(*ll))) {
-            UNLOCK_LASTLOG;
-            close (ll_fd);
+        const ssize_t n = read_all (ll_fd, (void *)ll, sizeof(*ll));
+        saved_errno = errno;
+        UNLOCK_LASTLOG;
+        close (ll_fd);
+
+        if (n == -1) {
+            errno = saved_errno;
             return -1;
         }
 
-        UNLOCK_LASTLOG;
-        close (ll_fd);
+        if (n != sizeof(*ll)) {
+            return -2;
+        }
+
         return 1;
     }
 
-    /* Don't care about extensions. Even if size if bigger than expected... */
+    /* Well. ll_ex is not NULL but we have bigger file than sizeof(*ll).
+     * Ring the bell! */
     if (ll_ex == NULL) {
         UNLOCK_LASTLOG;
         close (ll_fd);
-        return -1;
+        return -2;
     }
 
     /* Format with extensions. */
-    if (st.st_size < (off_t)(sizeof (*ll) + sizeof (*ll_ex))) {
+    if (st.st_size < (off_t)((off_t)sizeof (*ll) + (off_t)sizeof (*ll_ex))) {
         UNLOCK_LASTLOG;
         close (ll_fd);
-        return -1;
+        return -2;
     }
 
     struct iovec iov[2] = {
@@ -215,12 +252,10 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
         { .iov_base = (void *) ll_ex, .iov_len = sizeof (*ll_ex) }
     };
 
-    memset (ll, 0, sizeof (*ll));
-    memset (ll_ex, 0, sizeof (*ll_ex));
     const ssize_t n = readv (ll_fd, iov, (sizeof (iov) / sizeof (iov[0])));
     saved_errno = errno;
-    close (ll_fd);
     UNLOCK_LASTLOG;
+    close (ll_fd);
 
     if (n == -1) {
         errno = saved_errno;
@@ -284,30 +319,33 @@ try_open_again: ;
     /* Close dir handle here. */
     close (dir_fd);
 
+    LOCK_LASTLOG_WRITE
+    {
+        saved_errno = errno;
+        close (ll_fd);
+        errno = saved_errno;
+        return -2;
+    }
+
     struct stat st;
     if (fstat(ll_fd, &st) == -1) {
         saved_errno = errno;
+        UNLOCK_LASTLOG;
         close (ll_fd);
         errno = saved_errno;
         return -1;
     }
 
     if (!S_ISREG(st.st_mode)) {
+        UNLOCK_LASTLOG;
         close (ll_fd);
         return -2;
     }
 
-    LOCK_LASTLOG_WRITE
-    {
-        saved_errno = errno;
-        close (ll_fd);
-        errno = saved_errno;
-        return -1;
-    }
 
     /* Don't care about extension. */
     if (ll_ex == NULL) {
-        const ssize_t n = write (ll_fd, ll, sizeof (*ll));
+        const ssize_t n = write_all (ll_fd, (void *)ll, sizeof (*ll));
         saved_errno = errno;
 
         UNLOCK_LASTLOG;
