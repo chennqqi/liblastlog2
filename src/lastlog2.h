@@ -4,8 +4,8 @@
 #include <lastlog.h>
 
 enum {
-    LASTLOG2_ERR,
-    LASTLOG2_OK
+    LASTLOG2_ERR = -1,
+    LASTLOG2_OK = 0
 };
 
 struct ll_extension {

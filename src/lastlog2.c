@@ -67,7 +67,7 @@ static ssize_t read_all (int fd, void *const buff, ssize_t len)
             ret = read (fd, buff + total, len - total);
         } while ((ret == -1) && (errno == EINTR));
         /* Something failed bad... */
-        if (ret <= 0) { return -1; }
+        if (ret <= 0) { return LASTLOG2_ERR; }
         total += ret;
     }
 
@@ -83,7 +83,7 @@ static ssize_t write_all (int fd, void *const buff, ssize_t len)
             ret = write (fd, buff + total, len - total);
         } while ((ret == -1) && (errno == EINTR));
         /* Something failed bad... */
-        if (ret <= 0) { return -1; }
+        if (ret <= 0) { return LASTLOG2_ERR; }
         total += ret;
     }
 
@@ -114,8 +114,7 @@ repeat: ;
             case EACCES:
             case ENOTDIR:
             case ELOOP:
-                errno = saved_errno;
-                return -1;
+                return saved_errno;
         }
 
         if (mkdir (ll_path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) != 0) {
@@ -126,8 +125,7 @@ repeat: ;
                 /* Well. Someone could remove directory while another round of checking. */
                 goto repeat;
             }
-            errno = saved_errno;
-            return -1;
+            return saved_errno;
         } else {
             checked = 1;
             goto repeat;
@@ -138,8 +136,7 @@ repeat: ;
         return dir_fd;
     }
 
-    errno = saved_errno;
-    return -1;
+    return saved_errno;
 }
 
 static int check_extension(unsigned int extension_id)
@@ -179,7 +176,7 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
     } while ((ll_fd == -1) && (errno == EINTR));
     int saved_errno = errno;
     if (ll_fd == -1) {
-        return -1;
+        return saved_errno;
     }
     
     LOCK_LASTLOG
@@ -187,8 +184,7 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
         /* FAIL */
         saved_errno = errno;
         close (ll_fd);
-        errno = saved_errno;
-        return -2;
+        return saved_errno;
     }
 
     struct stat st;
@@ -196,21 +192,18 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
         saved_errno = errno;
         UNLOCK_LASTLOG;
         close (ll_fd);
-        errno = saved_errno;
-        return LASTLOG2_ERR;
+        return saved_errno;
     }
 
     if (!S_ISREG(st.st_mode)) {
         UNLOCK_LASTLOG;
         close (ll_fd);
-        errno = ENOENT;
         return LASTLOG2_ERR;
     }
 
     if (st.st_size < (off_t)sizeof (*ll)) {
         UNLOCK_LASTLOG;
         close (ll_fd);
-        errno = ESPIPE;
         return LASTLOG2_ERR;
     }
 
@@ -223,12 +216,10 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
         close (ll_fd);
 
         if (n == -1) {
-            errno = saved_errno;
-            return LASTLOG2_ERR;
+            return saved_errno;
         }
 
         if (n != sizeof(*ll)) {
-            errno = ESPIPE;
             return LASTLOG2_ERR;
         }
 
@@ -240,7 +231,6 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
     if (ll_ex == NULL) {
         UNLOCK_LASTLOG;
         close (ll_fd);
-        errno = ESPIPE;
         return LASTLOG2_ERR;
     }
 
@@ -248,7 +238,6 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
     if (st.st_size < (off_t)((off_t)sizeof (*ll) + (off_t)sizeof (*ll_ex))) {
         UNLOCK_LASTLOG;
         close (ll_fd);
-        errno = ESPIPE;
         return LASTLOG2_ERR; 
     }
 
@@ -263,13 +252,11 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
     close (ll_fd);
 
     if (n == -1) {
-        errno = saved_errno;
-        return LASTLOG2_ERR;
+        return saved_errno;
     }
 
     /* Allow more extension in future. */
     if (n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex))) {
-        errno = ESPIPE;
         return LASTLOG2_ERR;
     }
 
@@ -319,8 +306,7 @@ try_open_again: ;
             goto try_open_again;
         }
         close (dir_fd);
-        errno = saved_errno;
-        return LASTLOG2_ERR;
+        return saved_errno;
     }
     /* Close dir handle here. */
     close (dir_fd);
@@ -329,8 +315,7 @@ try_open_again: ;
     {
         saved_errno = errno;
         close (ll_fd);
-        errno = saved_errno;
-        return LASTLOG2_ERR;
+        return saved_errno;
     }
 
     struct stat st;
@@ -338,14 +323,12 @@ try_open_again: ;
         saved_errno = errno;
         UNLOCK_LASTLOG;
         close (ll_fd);
-        errno = saved_errno;
-        return LASTLOG2_ERR;
+        return saved_errno;
     }
 
     if (!S_ISREG(st.st_mode)) {
         UNLOCK_LASTLOG;
         close (ll_fd);
-        errno = ESPIPE;
         return LASTLOG2_ERR; 
     }
 
@@ -360,12 +343,10 @@ try_open_again: ;
 
         /* Allow reading of extended record as a non-extended record. */
         if (n == -1) {
-            errno = saved_errno;
-            return LASTLOG2_ERR;
+            return saved_errno;
         }
 
         if (n < (ssize_t)(sizeof(*ll))) {
-            errno = ESPIPE;
             return LASTLOG2_ERR;
         }
 
@@ -384,12 +365,10 @@ try_open_again: ;
     close (ll_fd);
 
     if (n == -1) { 
-        errno = saved_errno;
-        return LASTLOG2_ERR;
+        return saved_errno;
     }
 
     if (n < (ssize_t)(sizeof(*ll) + sizeof(*ll_ex))) {
-        errno = ESPIPE;
         return LASTLOG2_ERR;
     }
 
