@@ -3,6 +3,11 @@
 
 #include <lastlog.h>
 
+enum {
+    LASTLOG2_ERR,
+    LASTLOG2_OK
+};
+
 struct ll_extension {
     unsigned int extension_id;
     unsigned long fail_logs;

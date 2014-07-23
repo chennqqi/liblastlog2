@@ -197,23 +197,25 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
         UNLOCK_LASTLOG;
         close (ll_fd);
         errno = saved_errno;
-        return -1;
+        return LASTLOG2_ERR;
     }
 
     if (!S_ISREG(st.st_mode)) {
         UNLOCK_LASTLOG;
         close (ll_fd);
-        return -2;
+        errno = ENOENT;
+        return LASTLOG2_ERR;
     }
 
     if (st.st_size < (off_t)sizeof (*ll)) {
         UNLOCK_LASTLOG;
         close (ll_fd);
-        return -2;
+        errno = ESPIPE;
+        return LASTLOG2_ERR;
     }
 
     /* Plain old format. */
-    if ((st.st_size >= sizeof(*ll)) && (ll_ex == NULL)) {
+    if ((st.st_size >= (off_t) sizeof(*ll)) && (ll_ex == NULL)) {
         memset (ll, 0, sizeof(*ll));
         const ssize_t n = read_all (ll_fd, (void *)ll, sizeof(*ll));
         saved_errno = errno;
@@ -222,14 +224,15 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
 
         if (n == -1) {
             errno = saved_errno;
-            return -1;
+            return LASTLOG2_ERR;
         }
 
         if (n != sizeof(*ll)) {
-            return -2;
+            errno = ESPIPE;
+            return LASTLOG2_ERR;
         }
 
-        return 1;
+        return LASTLOG2_OK;
     }
 
     /* Well. ll_ex is not NULL but we have bigger file than sizeof(*ll).
@@ -237,14 +240,16 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
     if (ll_ex == NULL) {
         UNLOCK_LASTLOG;
         close (ll_fd);
-        return -2;
+        errno = ESPIPE;
+        return LASTLOG2_ERR;
     }
 
     /* Format with extensions. */
     if (st.st_size < (off_t)((off_t)sizeof (*ll) + (off_t)sizeof (*ll_ex))) {
         UNLOCK_LASTLOG;
         close (ll_fd);
-        return -2;
+        errno = ESPIPE;
+        return LASTLOG2_ERR; 
     }
 
     struct iovec iov[2] = {
@@ -259,21 +264,22 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
 
     if (n == -1) {
         errno = saved_errno;
-        return -1;
+        return LASTLOG2_ERR;
     }
 
     /* Allow more extension in future. */
     if (n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex))) {
-        return -2;
+        errno = ESPIPE;
+        return LASTLOG2_ERR;
     }
 
     if (check_extension (ll_ex->extension_id))
     {
-        return 1;
+        return LASTLOG2_OK;
     }
 
     /* Be like negative at all cost. */
-    return -2;
+    return LASTLOG2_ERR;
 }
 
 inline int putlstlogent (const uid_t uid, const struct lastlog *const ll)
@@ -298,7 +304,7 @@ static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, c
 
     const int dir_fd = try_create_lastlog_dir (ll_path);
     if (dir_fd == -1) {
-        return -1;
+        return LASTLOG2_ERR;
     }
 
     /* ... + 1 for slash char */
@@ -314,7 +320,7 @@ try_open_again: ;
         }
         close (dir_fd);
         errno = saved_errno;
-        return -1;
+        return LASTLOG2_ERR;
     }
     /* Close dir handle here. */
     close (dir_fd);
@@ -324,7 +330,7 @@ try_open_again: ;
         saved_errno = errno;
         close (ll_fd);
         errno = saved_errno;
-        return -2;
+        return LASTLOG2_ERR;
     }
 
     struct stat st;
@@ -333,13 +339,14 @@ try_open_again: ;
         UNLOCK_LASTLOG;
         close (ll_fd);
         errno = saved_errno;
-        return -1;
+        return LASTLOG2_ERR;
     }
 
     if (!S_ISREG(st.st_mode)) {
         UNLOCK_LASTLOG;
         close (ll_fd);
-        return -2;
+        errno = ESPIPE;
+        return LASTLOG2_ERR; 
     }
 
 
@@ -354,38 +361,37 @@ try_open_again: ;
         /* Allow reading of extended record as a non-extended record. */
         if (n == -1) {
             errno = saved_errno;
-            return -1;
+            return LASTLOG2_ERR;
         }
 
         if (n < (ssize_t)(sizeof(*ll))) {
-            return -2;
+            errno = ESPIPE;
+            return LASTLOG2_ERR;
         }
 
-        return 1;
-
-    } else {
-
-        struct iovec iov[2] = {
-            { .iov_base = (void *) ll, .iov_len = sizeof (*ll) },
-            { .iov_base = (void *) ll_ex, .iov_len = sizeof (*ll_ex) }
-        };
-        const ssize_t n = writev (ll_fd, iov, (sizeof (iov) / sizeof (iov[0])));
-        saved_errno = errno;
-
-        UNLOCK_LASTLOG;
-        close (ll_fd);
-
-        if (n == -1) { 
-            errno = saved_errno;
-            return -1;
-        }
-
-        if (n < (ssize_t)(sizeof(*ll) + sizeof(*ll_ex))) {
-            return -2;
-        }
-
-        return 1;
+        return LASTLOG2_OK;
     }
 
-    return -2;
+    /* Write to file with extension. */
+    struct iovec iov[2] = {
+        { .iov_base = (void *) ll, .iov_len = sizeof (*ll) },
+        { .iov_base = (void *) ll_ex, .iov_len = sizeof (*ll_ex) }
+    };
+    const ssize_t n = writev (ll_fd, iov, (sizeof (iov) / sizeof (iov[0])));
+    saved_errno = errno;
+
+    UNLOCK_LASTLOG;
+    close (ll_fd);
+
+    if (n == -1) { 
+        errno = saved_errno;
+        return LASTLOG2_ERR;
+    }
+
+    if (n < (ssize_t)(sizeof(*ll) + sizeof(*ll_ex))) {
+        errno = ESPIPE;
+        return LASTLOG2_ERR;
+    }
+
+    return LASTLOG2_OK;
 }
