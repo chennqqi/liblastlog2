@@ -1,0 +1,101 @@
+diff --git a/configure.ac b/configure.ac
+index 79fceeb..4e5b426 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -1185,6 +1185,14 @@ AC_ARG_ENABLE([newgrp],
+ UL_BUILD_INIT([newgrp])
+ AM_CONDITIONAL([BUILD_NEWGRP], [test "x$build_newgrp" = xyes])
+ 
++AC_ARG_WITH([lastlog2], AS_HELP_STRING([--with-lastlog2], [compile with liblastlog2 support]),
++    WITH_LASTLOG2=$enableval, WITH_LASTLOG2=yes)
++AS_IF([test "$WITH_LASTLOG2" == "yes"], [
++    AC_CHECK_HEADERS([lastlog2.h])
++    AC_DEFINE([HAVE_LASTLOG2], [1],
++         [Define to 1 if liblastlog2 support should be compiled in.])
++    AM_CONDITIONAL([HAVE_LASTLOG2], [true])
++])
+ 
+ AC_ARG_WITH([user], AS_HELP_STRING([--without-user], [compile without libuser (remote chsh)]),
+   [], [with_user=check]
+diff --git a/login-utils/Makemodule.am b/login-utils/Makemodule.am
+index aca028a..0f5cfb7 100644
+--- a/login-utils/Makemodule.am
++++ b/login-utils/Makemodule.am
+@@ -57,6 +57,9 @@ endif
+ if HAVE_SELINUX
+ login_LDADD += -lselinux
+ endif
++if HAVE_LASTLOG2
++login_LDADD += -llastlog2
++endif
+ endif # BUILD_LOGIN
+ 
+ 
+diff --git a/login-utils/login.c b/login-utils/login.c
+index d070795..ab29b12 100644
+--- a/login-utils/login.c
++++ b/login-utils/login.c
+@@ -62,6 +62,10 @@
+ # include <libaudit.h>
+ #endif
+ 
++#ifdef HAVE_LASTLOG2
++# include <lastlog2.h>
++#endif
++
+ #include "c.h"
+ #include "setproctitle.h"
+ #include "pathnames.h"
+@@ -502,6 +506,7 @@ static void log_lastlog(struct login_context *cxt)
+ 	if (!cxt->pwd)
+ 		return;
+ 
++#ifndef HAVE_LASTLOG2
+ 	fd = open(_PATH_LASTLOG, O_RDWR | O_CREAT, 0);
+ 	if (fd < 0)
+ 		return;
+@@ -512,9 +517,16 @@ static void log_lastlog(struct login_context *cxt)
+ 	/*
+ 	 * Print last log message.
+ 	 */
++#else
++    fd = -1;
++#endif
+ 	if (!cxt->quiet) {
++#ifndef HAVE_LASTLOG2
+ 		if (read(fd, (char *)&ll, sizeof(ll)) == sizeof(ll) &&
+ 							ll.ll_time != 0) {
++#else
++        if (getlstlogent(cxt->pwd->pw_uid, &ll) == LASTLOG2_OK) {
++#endif 
+ 			time_t ll_time = (time_t) ll.ll_time;
+ 
+ 			printf(_("Last login: %.*s "), 24 - 5, ctime(&ll_time));
+@@ -525,10 +537,11 @@ static void log_lastlog(struct login_context *cxt)
+ 				printf(_("on %.*s\n"),
+ 				       (int)sizeof(ll.ll_line), ll.ll_line);
+ 		}
++#ifndef HAVE_LASTLOG2
+ 		if (lseek(fd, (off_t) cxt->pwd->pw_uid * sizeof(ll), SEEK_SET) == -1)
+ 			goto done;
++#endif
+ 	}
+-
+ 	memset((char *)&ll, 0, sizeof(ll));
+ 
+ 	time(&t);
+@@ -538,9 +551,13 @@ static void log_lastlog(struct login_context *cxt)
+ 		xstrncpy(ll.ll_line, cxt->tty_name, sizeof(ll.ll_line));
+ 	if (cxt->hostname)
+ 		xstrncpy(ll.ll_host, cxt->hostname, sizeof(ll.ll_host));
+-
++#ifndef HAVE_LASTLOG2
+ 	if (write_all(fd, (char *)&ll, sizeof(ll)))
+ 		warn(_("write lastlog failed"));
++#else
++    if (putlstlogent(cxt->pwd->pw_uid, &ll) != LASTLOG2_OK)
++		warn(_("write lastlog failed"));
++#endif
+ done:
+ 	close(fd);
+ }

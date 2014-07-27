@@ -1,0 +1,194 @@
+commit 15599b3e03f05267d0e40fb66f20a0eb3223680b
+Author: Robin Hack <rhack@redhat.com>
+Date:   Fri Jul 25 10:03:27 2014 +0200
+
+    Liblastlog2 patch.
+    
+    Add --enable-liblastlog2
+
+diff --git a/configure.in b/configure.in
+index 8d1a12e..f8d5761 100644
+--- a/configure.in
++++ b/configure.in
+@@ -353,6 +353,18 @@ dnl Checks for the existence of libdl - on BSD and Tru64 its part of libc
+ AC_CHECK_LIB([dl], [dlopen], LIBDL="-ldl", LIBDL="")
+ AC_SUBST(LIBDL)
+ 
++#
++# Enable liblastlog2
++#
++AC_ARG_ENABLE([lastlog2],
++    AS_HELP_STRING([--enable-lastlog2],[enable liblastlog2 for lastlog files]),
++	WITH_LASTLOG2=$enableval, WITH_LASTLOG2=yes)
++if test "$WITH_LASTLOG2" == "yes" ; then
++   AC_DEFINE([HAVE_LASTLOG2],1,
++         [Define to 1 if liblastlog2 support should be compiled in.])
++    AM_CONDITIONAL([HAVE_LASTLOG2], [true])
++fi
++
+ # Check for cracklib
+ AC_ARG_ENABLE([cracklib],
+         AS_HELP_STRING([--disable-cracklib],[do not use cracklib]),
+diff --git a/modules/pam_lastlog/Makefile.am b/modules/pam_lastlog/Makefile.am
+index 1c63932..ea2b219 100644
+--- a/modules/pam_lastlog/Makefile.am
++++ b/modules/pam_lastlog/Makefile.am
+@@ -20,6 +20,9 @@ AM_LDFLAGS = -no-undefined -avoid-version -module
+ if HAVE_VERSIONING
+   AM_LDFLAGS += -Wl,--version-script=$(srcdir)/../modules.map
+ endif
++if HAVE_LASTLOG2
++  AM_LDFLAGS += -llastlog2
++endif
+ 
+ securelib_LTLIBRARIES = pam_lastlog.la
+ pam_lastlog_la_LIBADD = $(top_builddir)/libpam/libpam.la -lutil
+diff --git a/modules/pam_lastlog/pam_lastlog.c b/modules/pam_lastlog/pam_lastlog.c
+index bd454ff..1952cae 100644
+--- a/modules/pam_lastlog/pam_lastlog.c
++++ b/modules/pam_lastlog/pam_lastlog.c
+@@ -18,6 +18,9 @@
+ #else
+ # include <lastlog.h>
+ #endif
++#ifdef HAVE_LASTLOG2
++# include <lastlog2.h>
++#endif
+ #include <pwd.h>
+ #include <stdlib.h>
+ #include <stdarg.h>
+@@ -187,6 +190,7 @@ get_tty(pam_handle_t *pamh)
+     return terminal_line;
+ }
+ 
++#ifndef HAVE_LASTLOG2
+ static int
+ last_login_open(pam_handle_t *pamh, int announce, uid_t uid)
+ {
+@@ -223,12 +227,14 @@ last_login_open(pam_handle_t *pamh, int announce, uid_t uid)
+ 
+     return last_fd;
+ }
+-
++#endif
+ 
+ static int
+ last_login_read(pam_handle_t *pamh, int announce, int last_fd, uid_t uid, time_t *lltime)
+ {
++#ifndef HAVE_LASTLOG2
+     struct flock last_lock;
++#endif
+     struct lastlog last_login;
+     int retval = PAM_SUCCESS;
+     char the_time[256];
+@@ -236,6 +242,11 @@ last_login_read(pam_handle_t *pamh, int announce, int last_fd, uid_t uid, time_t
+     char *host = NULL;
+     char *line = NULL;
+ 
++#ifdef HAVE_LASTLOG2
++    if (getlstlogent(uid, &last_login) != LASTLOG2_OK) {
++        memset(&last_login, 0, sizeof(last_login));
++    }
++#else
+     memset(&last_lock, 0, sizeof(last_lock));
+     last_lock.l_type = F_RDLCK;
+     last_lock.l_whence = SEEK_SET;
+@@ -256,6 +267,7 @@ last_login_read(pam_handle_t *pamh, int announce, int last_fd, uid_t uid, time_t
+ 
+     last_lock.l_type = F_UNLCK;
+     (void) fcntl(last_fd, F_SETLK, &last_lock);        /* unlock */
++#endif
+ 
+     *lltime = last_login.ll_time;
+     if (!last_login.ll_time) {
+@@ -336,7 +348,9 @@ static int
+ last_login_write(pam_handle_t *pamh, int announce, int last_fd,
+ 		 uid_t uid, const char *user)
+ {
++#ifndef HAVE_LASTLOG2
+     struct flock last_lock;
++#endif
+     struct lastlog last_login;
+     time_t ll_time;
+     const void *void_remote_host = NULL;
+@@ -344,11 +358,13 @@ last_login_write(pam_handle_t *pamh, int announce, int last_fd,
+     const char *terminal_line;
+     int retval = PAM_SUCCESS;
+ 
++#ifndef HAVE_LASTLOG2
+     /* rewind */
+     if (lseek(last_fd, sizeof(last_login) * (off_t) uid, SEEK_SET) < 0) {
+ 	pam_syslog(pamh, LOG_ERR, "failed to lseek %s: %m", _PATH_LASTLOG);
+ 	return PAM_SERVICE_ERR;
+     }
++#endif
+ 
+     /* set this login date */
+     D(("set the most recent login time"));
+@@ -375,6 +391,7 @@ last_login_write(pam_handle_t *pamh, int announce, int last_fd,
+     strncat(last_login.ll_line, terminal_line, sizeof(last_login.ll_line)-1);
+     terminal_line = NULL;
+ 
++#ifndef HAVE_LASTLOG2
+     D(("locking lastlog file"));
+ 
+     /* now we try to lock this file-record exclusively; non-blocking */
+@@ -389,17 +406,25 @@ last_login_write(pam_handle_t *pamh, int announce, int last_fd,
+ 	pam_syslog(pamh, LOG_WARNING, "file %s is locked/write", _PATH_LASTLOG);
+         sleep(LASTLOG_IGNORE_LOCK_TIME);
+     }
++#endif
+ 
+     D(("writing to the lastlog file"));
++#ifdef HAVE_LASTLOG2
++    if (putlstlogent(uid, &last_login) != LASTLOG2_OK) {
++#else
+     if (pam_modutil_write (last_fd, (char *) &last_login,
+ 			   sizeof (last_login)) != sizeof(last_login)) {
++#endif
+ 	pam_syslog(pamh, LOG_ERR, "failed to write %s: %m", _PATH_LASTLOG);
+ 	retval = PAM_SERVICE_ERR;
+     }
++	    pam_syslog(pamh, LOG_DEBUG, "OK!");
+ 
++#ifndef HAVE_LASTLOG2
+     last_lock.l_type = F_UNLCK;
+     (void) fcntl(last_fd, F_SETLK, &last_lock);        /* unlock */
+     D(("unlocked"));
++#endif
+ 
+     if (announce & LASTLOG_WTMP) {
+ 	/* write wtmp entry for user */
+@@ -419,10 +444,14 @@ last_login_date(pam_handle_t *pamh, int announce, uid_t uid, const char *user, t
+     int last_fd;
+ 
+     /* obtain the last login date and all the relevant info */
++#ifndef HAVE_LASTLOG2
+     last_fd = last_login_open(pamh, announce, uid);
+     if (last_fd < 0) {
+         return PAM_SERVICE_ERR;
+     }
++#else
++    last_fd = -1;
++#endif
+ 
+     retval = last_login_read(pamh, announce, last_fd, uid, lltime);
+     if (retval != PAM_SUCCESS)
+@@ -605,12 +634,16 @@ pam_sm_authenticate(pam_handle_t *pamh, int flags,
+     if (uid == 0)
+ 	return PAM_SUCCESS;
+ 
++#ifndef HAVE_LASTLOG2
+     /* obtain the last login date and all the relevant info */
+     last_fd = last_login_open(pamh, ctrl, uid);
+     if (last_fd < 0) {
+ 	return PAM_IGNORE;
+     }
+-
++    /* Well.. last_login_read uses getlstlogent. */
++#else
++    last_fd = -1;
++#endif
+     retval = last_login_read(pamh, ctrl|LASTLOG_QUIET, last_fd, uid, &lltime);
+     close(last_fd);
+ 
