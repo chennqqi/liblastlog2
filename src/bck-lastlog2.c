@@ -185,8 +185,8 @@ static int getent (llent_t *const ent)
 
     /* Ok. I didn't use getters/setters here. */
     ent->time = ll.ll_time;
-    strncpy (ent->line, ll.line, sizeof(ent->line) - 1);
-    strncpy (ent->host, ll.host, sizeof(ent->host) - 1);
+    strncpy (ent->line, ll.ll_line, sizeof(ent->line) - 1);
+    strncpy (ent->host, ll.ll_host, sizeof(ent->host) - 1);
 
     return LASTLOG2_OK;
 }
