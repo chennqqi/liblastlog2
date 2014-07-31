@@ -10,8 +10,8 @@ static int putent (const llent_t *const ent) __attribute__ ((warn_unused_result)
 /* Externaly visible */
 const jump_tbl_t ll_bck_jump_tbl = {
     init:               NULL, 
-    putent:             putent,
-	getent:             getent,
+    putent:             &putent,
+	getent:             &getent,
     fini:               NULL,
 	backend_type:       LL_LASTLOG2,
 };

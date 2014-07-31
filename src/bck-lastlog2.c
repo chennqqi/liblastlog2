@@ -53,6 +53,9 @@
         fcntl (ll_fd, F_SETLK, &ll_lock); \
     } while (0)
 
+/* Internal functions exported via jump table */
+static int getent (llent_t *const ent) __attribute__ ((warn_unused_result));
+static int putent (const llent_t *const ent) __attribute__ ((warn_unused_result));
 
 /* Internal functions _NOT_ exported via jump table */
 static ssize_t read_all (int fd, void *const buff, ssize_t len);
@@ -181,7 +184,7 @@ static int getent (llent_t *const ent)
     }
 
     /* If struct will be bigger, just return zeroes */
-    memset (&ent, 0, sizeof(ent));
+    memset (ent, 0, sizeof(ent));
 
     /* Ok. I didn't use getters/setters here. */
     ent->time = ll.ll_time;
