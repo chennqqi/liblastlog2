@@ -195,6 +195,7 @@ static int putent (const llent_t *const ent)
 {
     assert (ent != NULL);
 
+    uid_t uid = ent->uid;
     const uid_t uid_dir = get_uid_dir (uid);
 
     char ll_path[sizeof_strs2 (LASTLOG_PATH, STR (UID_MAX))] = {0};
@@ -243,7 +244,13 @@ try_open_again: ;
         return LASTLOG2_ERR; 
     }
 
-    const ssize_t n = write_all (ll_fd, (void *)ll, sizeof (*ll));
+    struct lastlog ll;
+    memset (&ll, 0, sizeof(ll);
+    ll.ll_time = ent->time;
+    strncpy (ll.ll_line, ent->line, sizeof(ll.ll_line) - 1);
+    strncpy (ll.ll_host, ent->host, sizeof(ll.ll_host) - 1);
+
+    const ssize_t n = write_all (ll_fd, &ll, sizeof (ll));
     saved_errno = errno;
 
     UNLOCK_LASTLOG;
