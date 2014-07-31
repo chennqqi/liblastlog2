@@ -176,7 +176,7 @@ static int getent (llent_t *const ent)
         return -saved_errno;
     }
 
-    if (n != sizeof(*ll)) {
+    if (n != sizeof(ll)) {
         return LASTLOG2_ERR;
     }
 
