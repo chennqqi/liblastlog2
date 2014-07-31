@@ -245,7 +245,7 @@ try_open_again: ;
     }
 
     struct lastlog ll;
-    memset (&ll, 0, sizeof(ll);
+    memset (&ll, 0, sizeof(ll));
     ll.ll_time = ent->time;
     strncpy (ll.ll_line, ent->line, sizeof(ll.ll_line) - 1);
     strncpy (ll.ll_host, ent->host, sizeof(ll.ll_host) - 1);
