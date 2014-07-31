@@ -250,7 +250,7 @@ try_open_again: ;
     strncpy (ll.ll_line, ent->line, sizeof(ll.ll_line) - 1);
     strncpy (ll.ll_host, ent->host, sizeof(ll.ll_host) - 1);
 
-    const ssize_t n = write_all (ll_fd, &ll, sizeof (ll));
+    const ssize_t n = write_all (ll_fd, &ll, sizeof(ll));
     saved_errno = errno;
 
     UNLOCK_LASTLOG;
@@ -262,7 +262,7 @@ try_open_again: ;
     }
 
     /* Maybe format will be changed in future */
-    if (n >= (ssize_t)(sizeof(*ll))) {
+    if (n >= (ssize_t)(sizeof(ll))) {
         return LASTLOG2_OK;
     }
 
