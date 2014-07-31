@@ -8,7 +8,11 @@
 #include <errno.h>
 #include <stdio.h>
 #include <sys/uio.h>
+#ifndef __APPLE__ && __MACH__
 #include <lastlog.h>
+#else
+#include <utmp.h>
+#endif
 
 #include "bck-lastlog2.h"
 #include "backend.h"
@@ -54,11 +58,11 @@
     } while (0)
 
 const jump_tbl_t ll_bck_jump_tbl = {
-    init:               NULL, 
-    putent:             &putent,
-	getent:             &getent,
-    fini:               NULL,
-	backend_type:       LL_LASTLOG2,
+    .init           = NULL, 
+    .putent         = &putent,
+	.getent         = &getent,
+    .fini           = NULL,
+	.backend_type   = LL_LASTLOG2,
 };
 
 /* Internal functions _NOT_ exported via jump table */

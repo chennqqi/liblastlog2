@@ -1,7 +1,7 @@
 #include <assert.h>
 #include "backend.h"
 
-int main ()
+int main (int argc, char **argv)
 {
     ll_init (LL_LASTLOG2);
     llent_t ent = {
