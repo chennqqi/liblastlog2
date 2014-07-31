@@ -16,7 +16,7 @@ static const jump_tbl_t *const jmp_tables[_LL_END + 1] = {
 
 static const jump_tbl_t *priv_jump_tbl = NULL;
 
-retcode_t ll_init (ll_backend_id_t bck_id)
+int ll_init (ll_backend_id_t bck_id)
 {
     if (priv_jump_tbl != NULL) { return LASTLOG2_OK; }
 	if ((bck_id <= _LL_START) || (bck_id >= _LL_END)) { return LASTLOG2_ERR; }
@@ -28,14 +28,14 @@ retcode_t ll_init (ll_backend_id_t bck_id)
     return priv_jump_tbl->init();
 }
 
-retcode_t ll_putent (const llent_t *const ent)
+int ll_putent (const llent_t *const ent)
 {
     if (priv_jump_tbl != NULL) { return LASTLOG2_ERR; }
     if (ent == NULL) { return LASTLOG2_ERR; }
     return priv_jump_tbl->putent(ent);
 }
 
-retcode_t ll_getent (llent_t *const ent)
+int ll_getent (llent_t *const ent)
 {
     if (priv_jump_tbl != NULL) { return LASTLOG2_ERR; }
     if (ent == NULL) { return LASTLOG2_ERR; }
