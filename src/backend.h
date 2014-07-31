@@ -25,16 +25,16 @@ typedef struct {
 } llent_t;
 
 typedef struct {
-    retcode_t (*init)(void);
-	retcode_t (*putent)(const llent_t *const ent);
-	retcode_t (*getent)(llent_t *const ent);
-    retcode_t (*fini)(void);
+    int (*init)(void);
+	int (*putent)(const llent_t *const ent);
+	int (*getent)(llent_t *const ent);
+    int (*fini)(void);
 	ll_backend_id_t backend_type;
 } jump_tbl_t;
 
 /* Public functions */
-retcode_t ll_getent (llent_t *const ent);
-retcode_t ll_putent (const llent_t *const ent);
-retcode_t ll_init (ll_backend_id_t bck_id);
+int ll_getent (llent_t *const ent);
+int ll_putent (const llent_t *const ent);
+int ll_init (ll_backend_id_t bck_id);
 
 #endif /* _BACKEND_H */
