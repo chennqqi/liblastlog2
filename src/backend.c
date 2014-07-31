@@ -1,48 +1,43 @@
 #include <stdlib.h>
+#include <time.h>
 
-#ifdef HAVE_THREADS
-# include <pthread.h>
-static pthread_mutex_t _init_mutex =
-#endif
-
+#include "backend.h"
 /* Default backend */
-#include "lastlog2.h"
+#include "bck-lastlog2.h"
 /* Add new backends here. */
 
-typedef enum {
-	_LL_START_BCK_ID,
-	LL_LASTLOG2,
+
+/* Initialize jump table */
+static const jump_tbl_t *const jmp_tables[_LL_END + 1] = {
+	[_LL_START ... _LL_END] = NULL,
+	[LL_LASTLOG2] = &ll_bck_jump_tbl,
 /* Add new backends here. */
-/*	LL_JOURNALD, */
-	_LL_END_BCK_ID
-} ll_backend_id_t;
+};
 
-typedef int retcode_t;
-
-typedef struct {
-	retcode_t (*putlstlogent_p)();
-	retcode_t (*getlstlogent_p)();
-	ll_backend_t backend_t;
-} jump_tbl_t;
-
-static const jump_tbl_t *const inits[_LL_END] = {
-	[_LL_START_BCK_ID ... _LL_END_BCK_ID] = NULL,
-	[LL_LASTLOG2] = &init_lastlog2_backend,
-/* Add new backends here. */
-}
-
-typedef struct {
-	jump_tbl_t *jump_tbl;
-
-	time_t time;
-	char ll_line[1024];
-	char ll_host[256];
-} llent_t;
-
-static jump_tbl_t *priv_jump_tbl = NULL;
+static const jump_tbl_t *priv_jump_tbl = NULL;
 
 retcode_t ll_init (ll_backend_id_t bck_id)
 {
-	if ((bck_id =< _LL_FIRST) || (bck_id >= _LL_END)) { return LASTLOG_ERR; }
-	if (priv_jump_tbl[bck_id] == NULL) { return LASTLOG_ERR; }
+    if (priv_jump_tbl != NULL) { return LASTLOG2_OK; }
+	if ((bck_id <= _LL_START) || (bck_id >= _LL_END)) { return LASTLOG2_ERR; }
+	if (jmp_tables[bck_id] == NULL) { return LASTLOG2_ERR; }
+    if (jmp_tables[bck_id]->init == NULL) { return LASTLOG2_OK; }
+
+    priv_jump_tbl = jmp_tables[bck_id];
+    /* Call module init function. */
+    return priv_jump_tbl->init();
+}
+
+retcode_t ll_putent (const llent_t *const ent)
+{
+    if (priv_jump_tbl != NULL) { return LASTLOG2_ERR; }
+    if (ent == NULL) { return LASTLOG2_ERR; }
+    return priv_jump_tbl->putent(ent);
+}
+
+retcode_t ll_getent (llent_t *const ent)
+{
+    if (priv_jump_tbl != NULL) { return LASTLOG2_ERR; }
+    if (ent == NULL) { return LASTLOG2_ERR; }
+    return priv_jump_tbl->getent(ent);
 }

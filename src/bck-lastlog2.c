@@ -8,8 +8,10 @@
 #include <errno.h>
 #include <stdio.h>
 #include <sys/uio.h>
+#include <lastlog.h>
 
-#include "lastlog2.h"
+#include "backend.h"
+#include "bck-lastlog2.h"
 
 #define QUOTE(name) #name
 #define STR(macro) QUOTE(macro)
@@ -52,43 +54,12 @@
     } while (0)
 
 
+/* Internal functions _NOT_ exported via jump table */
+static ssize_t read_all (int fd, void *const buff, ssize_t len);
+static ssize_t write_all (int fd, void *const buff, ssize_t len);
+
 /* Internal functions */
-static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex);
-static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex);
-
 static retcode_t try_create_lastlog_dir (const char *const ll_path, int *const fd);
-
-static ssize_t read_all (int fd, void *const buff, ssize_t len)
-{
-    ssize_t total = 0;
-    int ret;
-    while (total < len) {
-        do {
-            ret = read (fd, buff + total, len - total);
-        } while ((ret == -1) && (errno == EINTR));
-        /* Something failed bad... */
-        if (ret <= 0) { return LASTLOG2_ERR; }
-        total += ret;
-    }
-
-    return total;
-}
-
-static ssize_t write_all (int fd, void *const buff, ssize_t len)
-{
-    ssize_t total = 0;
-    int ret;
-    while (total < len) {
-        do {
-            ret = write (fd, buff + total, len - total);
-        } while ((ret == -1) && (errno == EINTR));
-        /* Something failed bad... */
-        if (ret <= 0) { return LASTLOG2_ERR; }
-        total += ret;
-    }
-
-    return total;
-}
 
 static inline uid_t get_uid_dir (uid_t uid)
 {
@@ -141,32 +112,13 @@ repeat: ;
     return -saved_errno;
 }
 
-static int check_extension(unsigned int extension_id)
+static int getent (llent_t *const ent)
 {
-    switch (extension_id) {
-        case EXTENSION_MAGIC:
-            return 1;
-        default:
-            return 0;
-    }
+    assert (ent != NULL);
 
-    abort();
-}
+    struct lastlog ll;
 
-inline int getlstlogent (const uid_t uid, struct lastlog *const ll)
-{
-    return getlstlogent_impl (uid, ll, NULL);
-}
-
-inline int getlstlogentx (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex)
-{
-    return getlstlogent_impl (uid, ll, ll_ex);
-}
-
-static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct ll_extension *const ll_ex)
-{
-    assert (ll != NULL);
-
+    uid_t uid = ent->uid;
     const uid_t uid_dir = get_uid_dir (uid);
     /* ... +1 for slash char */
     char path[sizeof_strs3 (LASTLOG_PATH, STR (UID_MAX), STR (UID_MAX)) + 1] = {0};
@@ -203,52 +155,19 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
         return LASTLOG2_ERR;
     }
 
-    if (st.st_size < (off_t)sizeof (*ll)) {
+    if (st.st_size < (off_t)sizeof (ll)) {
         UNLOCK_LASTLOG;
         close (ll_fd);
         return LASTLOG2_ERR;
     }
 
     /* Plain old format. */
-    if ((st.st_size >= (off_t) sizeof(*ll)) && (ll_ex == NULL)) {
-        memset (ll, 0, sizeof(*ll));
-        const ssize_t n = read_all (ll_fd, (void *)ll, sizeof(*ll));
-        saved_errno = errno;
-        UNLOCK_LASTLOG;
-        close (ll_fd);
-
-        if (n == -1) {
-            return -saved_errno;
-        }
-
-        if (n != sizeof(*ll)) {
-            return LASTLOG2_ERR;
-        }
-
-        return LASTLOG2_OK;
-    }
-
-    /* Well. ll_ex is not NULL but we have bigger file than sizeof(*ll).
-     * Ring the bell! */
-    if (ll_ex == NULL) {
-        UNLOCK_LASTLOG;
-        close (ll_fd);
+    if (st.st_size < (off_t) sizeof(ll)) {
         return LASTLOG2_ERR;
     }
 
-    /* Format with extensions. */
-    if (st.st_size < (off_t)((off_t)sizeof (*ll) + (off_t)sizeof (*ll_ex))) {
-        UNLOCK_LASTLOG;
-        close (ll_fd);
-        return LASTLOG2_ERR; 
-    }
-
-    struct iovec iov[2] = {
-        { .iov_base = (void *) ll, .iov_len = sizeof (*ll) },
-        { .iov_base = (void *) ll_ex, .iov_len = sizeof (*ll_ex) }
-    };
-
-    const ssize_t n = readv (ll_fd, iov, (sizeof (iov) / sizeof (iov[0])));
+    memset (&ll, 0, sizeof(ll));
+    const ssize_t n = read_all (ll_fd, &ll, sizeof(ll));
     saved_errno = errno;
     UNLOCK_LASTLOG;
     close (ll_fd);
@@ -257,33 +176,24 @@ static int getlstlogent_impl (const uid_t uid, struct lastlog *const ll, struct 
         return -saved_errno;
     }
 
-    /* Allow more extension in future. */
-    if (n < (ssize_t)(sizeof (*ll) + sizeof (*ll_ex))) {
+    if (n != sizeof(*ll)) {
         return LASTLOG2_ERR;
     }
 
-    if (check_extension (ll_ex->extension_id))
-    {
-        return LASTLOG2_OK;
-    }
+    /* If struct will be bigger, just return zeroes */
+    memset (&ent, 0, sizeof(ent));
 
-    /* Be like negative at all cost. */
-    return LASTLOG2_ERR;
+    /* Ok. I didn't use getters/setters here. */
+    ent->time = ll.ll_time;
+    strncpy (ent->line, ll.line, sizeof(ent->line) - 1);
+    strncpy (ent->host, ll.host, sizeof(ent->host) - 1);
+
+    return LASTLOG2_OK;
 }
 
-int putlstlogent (const uid_t uid, const struct lastlog *const ll)
+static int putent (const llent_t *const ent)
 {
-    return putlstlogent_impl (uid, ll, NULL);
-}
-
-int putlstlogentx (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex)
-{
-    return putlstlogent_impl (uid, ll, ll_ex);
-}
-
-static int putlstlogent_impl (const uid_t uid, const struct lastlog *const ll, const struct ll_extension *const ll_ex)
-{
-    assert (ll != NULL);
+    assert (ent != NULL);
 
     const uid_t uid_dir = get_uid_dir (uid);
 
@@ -333,45 +243,53 @@ try_open_again: ;
         return LASTLOG2_ERR; 
     }
 
-
-    /* Don't care about extension. */
-    if (ll_ex == NULL) {
-        const ssize_t n = write_all (ll_fd, (void *)ll, sizeof (*ll));
-        saved_errno = errno;
-
-        UNLOCK_LASTLOG;
-        close (ll_fd);
-
-        /* Allow reading of extended record as a non-extended record. */
-        if (n == -1) {
-            return -saved_errno;
-        }
-
-        if (n < (ssize_t)(sizeof(*ll))) {
-            return LASTLOG2_ERR;
-        }
-
-        return LASTLOG2_OK;
-    }
-
-    /* Write to file with extension. */
-    struct iovec iov[2] = {
-        { .iov_base = (void *) ll, .iov_len = sizeof (*ll) },
-        { .iov_base = (void *) ll_ex, .iov_len = sizeof (*ll_ex) }
-    };
-    const ssize_t n = writev (ll_fd, iov, (sizeof (iov) / sizeof (iov[0])));
+    const ssize_t n = write_all (ll_fd, (void *)ll, sizeof (*ll));
     saved_errno = errno;
 
     UNLOCK_LASTLOG;
     close (ll_fd);
 
-    if (n == -1) { 
+    /* Allow reading of extended record as a non-extended record. */
+    if (n == -1) {
         return -saved_errno;
     }
 
-    if (n < (ssize_t)(sizeof(*ll) + sizeof(*ll_ex))) {
-        return LASTLOG2_ERR;
+    /* Maybe format will be changed in future */
+    if (n >= (ssize_t)(sizeof(*ll))) {
+        return LASTLOG2_OK;
     }
 
-    return LASTLOG2_OK;
+    return LASTLOG2_ERR;
+}
+
+static ssize_t read_all (int fd, void *const buff, ssize_t len)
+{
+    ssize_t total = 0;
+    int ret;
+    while (total < len) {
+        do {
+            ret = read (fd, buff + total, len - total);
+        } while ((ret == -1) && (errno == EINTR));
+        /* Something failed bad... */
+        if (ret <= 0) { return LASTLOG2_ERR; }
+        total += ret;
+    }
+
+    return total;
+}
+
+static ssize_t write_all (int fd, void *const buff, ssize_t len)
+{
+    ssize_t total = 0;
+    int ret;
+    while (total < len) {
+        do {
+            ret = write (fd, buff + total, len - total);
+        } while ((ret == -1) && (errno == EINTR));
+        /* Something failed bad... */
+        if (ret <= 0) { return LASTLOG2_ERR; }
+        total += ret;
+    }
+
+    return total;
 }
