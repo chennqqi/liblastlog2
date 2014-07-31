@@ -10,8 +10,8 @@
 #include <sys/uio.h>
 #include <lastlog.h>
 
-#include "backend.h"
 #include "bck-lastlog2.h"
+#include "backend.h"
 
 #define QUOTE(name) #name
 #define STR(macro) QUOTE(macro)
@@ -53,9 +53,13 @@
         fcntl (ll_fd, F_SETLK, &ll_lock); \
     } while (0)
 
-/* Internal functions exported via jump table */
-static int getent (llent_t *const ent) __attribute__ ((warn_unused_result));
-static int putent (const llent_t *const ent) __attribute__ ((warn_unused_result));
+const jump_tbl_t ll_bck_jump_tbl = {
+    init:               NULL, 
+    putent:             &putent,
+	getent:             &getent,
+    fini:               NULL,
+	backend_type:       LL_LASTLOG2,
+};
 
 /* Internal functions _NOT_ exported via jump table */
 static ssize_t read_all (int fd, void *const buff, ssize_t len);

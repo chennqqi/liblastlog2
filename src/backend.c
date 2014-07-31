@@ -1,9 +1,10 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "backend.h"
 /* Default backend */
 #include "bck-lastlog2.h"
+
+#include "backend.h"
 /* Add new backends here. */
 
 
@@ -21,23 +22,24 @@ int ll_init (ll_backend_id_t bck_id)
     if (priv_jump_tbl != NULL) { return LASTLOG2_OK; }
 	if ((bck_id <= _LL_START) || (bck_id >= _LL_END)) { return LASTLOG2_ERR; }
 	if (jmp_tables[bck_id] == NULL) { return LASTLOG2_ERR; }
-    if (jmp_tables[bck_id]->init == NULL) { return LASTLOG2_OK; }
 
     priv_jump_tbl = jmp_tables[bck_id];
+
+    if (jmp_tables[bck_id]->init == NULL) { return LASTLOG2_OK; }
     /* Call module init function. */
     return priv_jump_tbl->init();
 }
 
 int ll_putent (const llent_t *const ent)
 {
-    if (priv_jump_tbl != NULL) { return LASTLOG2_ERR; }
+    if (priv_jump_tbl == NULL) { return LASTLOG2_ERR; }
     if (ent == NULL) { return LASTLOG2_ERR; }
     return priv_jump_tbl->putent(ent);
 }
 
 int ll_getent (llent_t *const ent)
 {
-    if (priv_jump_tbl != NULL) { return LASTLOG2_ERR; }
+    if (priv_jump_tbl == NULL) { return LASTLOG2_ERR; }
     if (ent == NULL) { return LASTLOG2_ERR; }
     return priv_jump_tbl->getent(ent);
 }
