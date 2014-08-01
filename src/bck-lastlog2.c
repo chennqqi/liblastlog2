@@ -8,7 +8,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <sys/uio.h>
-#ifndef __APPLE__ && __MACH__
+#if !defined(__APPLE__) && !defined(__MACH__)
 #include <lastlog.h>
 #else
 #include <utmp.h>
