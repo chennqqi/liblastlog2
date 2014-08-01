@@ -195,7 +195,7 @@ static int getent (llent_t *const ent)
     }
 
     /* If struct will be bigger, just return zeroes */
-    memset (ent, 0, sizeof(ent));
+    memset (ent, 0, sizeof(*ent));
 
     /* Ok. I didn't use getters/setters here. */
     ent->time = ll.ll_time;
