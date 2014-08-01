@@ -1,18 +1,18 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include "backend.h"
 /* Default backend */
 #include "bck-lastlog2.h"
-
-#include "backend.h"
 /* Add new backends here. */
 
 
 /* Initialize jump table */
 static const jump_tbl_t *const jmp_tables[_LL_END + 1] = {
-	[_LL_START ... _LL_END] = NULL,
+	/* Well. This looks good but clang doesn't like it. */
+    /* [_LL_START ... _LL_END] = NULL, */
 	[LL_LASTLOG2] = &ll_bck_jump_tbl,
-/* Add new backends here. */
+    /* Add new backends here. */
 };
 
 static const jump_tbl_t *priv_jump_tbl = NULL;

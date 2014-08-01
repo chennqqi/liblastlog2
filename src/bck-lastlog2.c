@@ -28,7 +28,8 @@
 #define EXTENSION_MAGIC 1
 
 #define LOCK_LASTLOG \
-    struct flock ll_lock = {0}; \
+    struct flock ll_lock; \
+    memset (&ll_lock, 0, sizeof(ll_lock)); \
     /* All other attributes are set by initialization. */ \
     ll_lock.l_type = F_RDLCK; \
     ll_lock.l_whence = SEEK_SET; \
@@ -39,7 +40,8 @@
     if (__ret == -1)
 
 #define LOCK_LASTLOG_WRITE \
-    struct flock ll_lock = {0}; \
+    struct flock ll_lock; \
+    memset (&ll_lock, 0, sizeof(ll_lock)); \
     /* All other attributes are set by initialization. */ \
     ll_lock.l_type = F_WRLCK; \
     ll_lock.l_whence = SEEK_SET; \
@@ -51,7 +53,8 @@
 
 #define UNLOCK_LASTLOG \
     do { \
-        struct flock ll_lock = {0}; \
+        struct flock ll_lock; \
+        memset (&ll_lock, 0, sizeof(ll_lock)); \
         ll_lock.l_type = F_UNLCK; \
         ll_lock.l_whence = SEEK_SET; \
         fcntl (ll_fd, F_SETLK, &ll_lock); \
@@ -60,9 +63,9 @@
 const jump_tbl_t ll_bck_jump_tbl = {
     .init           = NULL, 
     .putent         = &putent,
-	.getent         = &getent,
+    .getent         = &getent,
     .fini           = NULL,
-	.backend_type   = LL_LASTLOG2,
+    .backend_type   = LL_LASTLOG2,
 };
 
 /* Internal functions _NOT_ exported via jump table */
