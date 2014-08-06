@@ -25,7 +25,7 @@
 #define sizeof_strs2(x, y)      ((sizeof((x)) - 1) + sizeof((y)))
 #define sizeof_strs3(x, y, z)   ((sizeof((x)) - 1) + (sizeof((y)) - 1) + (sizeof((z))))
 
-#define EXTENSION_MAGIC 1
+#define UID_MAX ((uid_t) -1)
 
 #define LOCK_LASTLOG \
     struct flock ll_lock; \

@@ -14,6 +14,4 @@ static const char *get_host(const llent_t *const ent) __attribute__ ((unused));
 /* Externaly visible */
 const jump_tbl_t ll_bck_jump_tbl;
 
-#define UID_MAX ((uid_t) -1)
-
 #endif /* _BCK_LASTLOG2_H */
