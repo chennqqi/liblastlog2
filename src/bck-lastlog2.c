@@ -75,6 +75,28 @@ static ssize_t write_all (int fd, void *const buff, ssize_t len);
 /* Internal functions */
 static retcode_t try_create_lastlog_dir (const char *const ll_path, int *const fd);
 
+static void set_line(llent_t *const ent, const char *const line)
+{
+    strncpy (ent->line, line, LL_BCK_LINE_LEN);
+}
+
+/* return pointer to ent
+ * usage: strncpy (my_space, get_line(ent), LL_BCK_LINE_LEN); */
+static const char *get_line(const llent_t *const ent)
+{
+    return ent->line;
+}
+
+static void set_host(llent_t *const ent, const char *const host)
+{
+    strncpy (ent->host, host, LL_BCK_HOST_LEN);
+}
+
+static const char *get_host(const llent_t *const ent)
+{
+    return ent->host;
+}
+
 static inline uid_t get_uid_dir (uid_t uid)
 {
     return (uid - (uid % 1000));

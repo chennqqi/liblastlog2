@@ -17,10 +17,14 @@ typedef enum {
     LASTLOG2_OK = 1
 } retcode_t;
 
+/* Public visible macros */
+#define LL_BCK_LINE_LEN 1024
+#define LL_BCK_HOST_LEN 256
+
 typedef struct {
 	time_t time;
-	char line[1024];
-	char host[256];
+	char line[LL_BCK_LINE_LEN];
+	char host[LL_BCK_HOST_LEN];
     uid_t uid;
 } llent_t;
 
