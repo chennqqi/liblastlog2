@@ -64,6 +64,10 @@ const jump_tbl_t ll_bck_jump_tbl = {
     .init           = NULL, 
     .putent         = &putent,
     .getent         = &getent,
+    .set_line       = &set_line,
+    .get_line       = &get_line,
+    .set_host       = &set_host,
+    .get_host       = &get_host,
     .fini           = NULL,
     .backend_type   = LL_LASTLOG2,
 };

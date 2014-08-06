@@ -32,6 +32,10 @@ typedef struct {
     int (*init)(void);
 	int (*putent)(const llent_t *const ent);
 	int (*getent)(llent_t *const ent);
+    void (*set_line)(llent_t *const ent, const char *const line);
+    const char *(*get_line)(const llent_t *const ent);
+    void (*set_host)(llent_t *const ent, const char *const host);
+    const char *(*get_host)(const llent_t *const ent);
     int (*fini)(void);
 	ll_backend_id_t backend_type;
 } jump_tbl_t;
