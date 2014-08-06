@@ -81,7 +81,7 @@ static retcode_t try_create_lastlog_dir (const char *const ll_path, int *const f
 
 static void set_line(llent_t *const ent, const char *const line)
 {
-    strncpy (ent->line, line, LL_BCK_LINE_LEN);
+    strncpy (ent->line, line, LL_BCK_LINE_LEN - 1);
 }
 
 /* return pointer to ent
@@ -93,7 +93,7 @@ static const char *get_line(const llent_t *const ent)
 
 static void set_host(llent_t *const ent, const char *const host)
 {
-    strncpy (ent->host, host, LL_BCK_HOST_LEN);
+    strncpy (ent->host, host, LL_BCK_HOST_LEN - 1);
 }
 
 static const char *get_host(const llent_t *const ent)
