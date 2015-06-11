@@ -177,6 +177,7 @@ static int getent (llent_t *const ent)
     {
         /* FAIL */
         saved_errno = errno;
+	/* no check for return value needed... no write */
         close (ll_fd);
         return -saved_errno;
     }
@@ -185,18 +186,21 @@ static int getent (llent_t *const ent)
     if (fstat (ll_fd, &st) == -1) {
         saved_errno = errno;
         UNLOCK_LASTLOG;
+	/* no check for return value needed... no write */
         close (ll_fd);
         return -saved_errno;
     }
 
     if (!S_ISREG(st.st_mode)) {
         UNLOCK_LASTLOG;
+	/* no check for return value needed... no write */
         close (ll_fd);
         return LASTLOG2_ERR;
     }
 
     if (st.st_size < (off_t)sizeof (ll)) {
         UNLOCK_LASTLOG;
+	/* no check for return value needed... no write */
         close (ll_fd);
         return LASTLOG2_ERR;
     }
@@ -210,6 +214,7 @@ static int getent (llent_t *const ent)
     const ssize_t n = read_all (ll_fd, &ll, sizeof(ll));
     saved_errno = errno;
     UNLOCK_LASTLOG;
+    /* no check for return value needed... no write */
     close (ll_fd);
 
     if (n == -1) {
@@ -294,7 +299,9 @@ try_open_again: ;
     saved_errno = errno;
 
     UNLOCK_LASTLOG;
-    close (ll_fd);
+    if (close (ll_fd) != 0) {
+	return -errno;
+    }
 
     /* Allow reading of extended record as a non-extended record. */
     if (n == -1) {
