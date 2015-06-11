@@ -340,8 +340,8 @@ static ssize_t write_all (int fd, void *const buff, ssize_t len)
         do {
             ret = write (fd, buff + total, len - total);
         } while ((ret == -1) && (errno == EINTR));
-        /* Something failed bad... */
-        if (ret <= 0) { return LASTLOG2_ERR; }
+        /* Something failed badly... */
+        if (ret <= 0) { return -1; }
         total += ret;
     }
 
