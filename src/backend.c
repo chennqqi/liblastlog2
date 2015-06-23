@@ -1,7 +1,8 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "backend.h"
+#include "lastlog2.h"
+
 /* Default backend */
 #include "bck-lastlog2.h"
 /* Add new backends here. */

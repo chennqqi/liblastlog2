@@ -14,13 +14,18 @@
 #include <utmp.h>
 #endif
 
+#if HAVE_CONFIG_H
+# include <config.h>
+#else
+# define LASTLOG2_PATH "/var/log/lastlog2/"
+#endif
+
 #include "bck-lastlog2.h"
-#include "backend.h"
+#include "lastlog2.h"
 
 #define QUOTE(name) #name
 #define STR(macro) QUOTE(macro)
 
-#define LASTLOG_PATH "/var/log/lastlog2/"
 
 #define sizeof_strs2(x, y)      ((sizeof((x)) - 1) + sizeof((y)))
 #define sizeof_strs3(x, y, z)   ((sizeof((x)) - 1) + (sizeof((y)) - 1) + (sizeof((z))))
@@ -161,8 +166,8 @@ static int getent (llent_t *const ent)
     uid_t uid = ent->uid;
     const uid_t uid_dir = get_uid_dir (uid);
     /* ... +1 for slash char */
-    char path[sizeof_strs3 (LASTLOG_PATH, STR (UID_MAX), STR (UID_MAX)) + 1] = {0};
-    sprintf (path, "%s%u/%u", LASTLOG_PATH, uid_dir, uid);
+    char path[sizeof_strs3 (LASTLOG2_PATH, STR (UID_MAX), STR (UID_MAX)) + 1] = {0};
+    sprintf (path, "%s%u/%u", LASTLOG2_PATH, uid_dir, uid);
 
     int ll_fd = -1;
     do {
@@ -243,8 +248,8 @@ static int putent (const llent_t *const ent)
     uid_t uid = ent->uid;
     const uid_t uid_dir = get_uid_dir (uid);
 
-    char ll_path[sizeof_strs2 (LASTLOG_PATH, STR (UID_MAX))] = {0};
-    sprintf (ll_path, "%s%u", LASTLOG_PATH, uid_dir);
+    char ll_path[sizeof_strs2 (LASTLOG2_PATH, STR (UID_MAX))] = {0};
+    sprintf (ll_path, "%s%u", LASTLOG2_PATH, uid_dir);
 
     int dir_fd = -1;
     if (try_create_lastlog_dir (ll_path, &dir_fd) != LASTLOG2_OK) {

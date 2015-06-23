@@ -1,7 +1,7 @@
 #ifndef _BCK_LASTLOG2_H
 #define _BCK_LASTLOG2_H
 
-#include "backend.h"
+#include "lastlog2.h"
 
 /* Internal functions exported via jump table */
 static int getent (llent_t *const ent) __attribute__ ((warn_unused_result, unused));
